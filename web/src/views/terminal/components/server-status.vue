@@ -14,11 +14,9 @@
           </div>
         </template>
         <span class="host-info-ip" :title="host">{{ host }}</span>
-        <template v-if="pingMs">
-          <el-tooltip effect="dark" content="该值为EasyNode服务端主机到目标主机的ping值" placement="bottom">
-            <span class="host-ping" :style="{backgroundColor: handlePingColor(pingMs)}">{{ pingMs }}ms</span>
-          </el-tooltip>
-        </template>
+        <el-tooltip effect="dark" content="该值为EasyNode服务端主机到目标主机的ping值" placement="bottom">
+          <span class="host-ping" :style="{backgroundColor: handlePingColor(pingValue)}">{{ pingText }}</span>
+        </el-tooltip>
         <el-tag size="small" style="cursor: pointer;margin-left: 10px;" @click="handleCopy">复制</el-tag>
       </el-descriptions-item>
 
@@ -238,6 +236,12 @@ const props = defineProps({
     type: [Number, String,]
   }
 })
+
+const pingValue = computed(() => {
+  const value = Number(props.pingMs)
+  return Number.isFinite(value) && value > 0 ? value : null
+})
+const pingText = computed(() => pingValue.value ? `${ pingValue.value }ms` : 'TO')
 
 // 状态数据
 const serverData = ref({
@@ -616,6 +620,7 @@ const handleUsedColor = (num) => {
 }
 
 const handlePingColor = (num) => {
+  if (!num) return 'rgba(255, 73, 73, 0.5)' // #ff4949
   if (num < 100) return 'rgba(19, 206, 102, 0.5)' // #13ce66
   if (num < 250) return 'rgba(230, 162, 60, 0.5)' // #e6a23c
   return 'rgba(255, 73, 73, 0.5)' // #ff4949

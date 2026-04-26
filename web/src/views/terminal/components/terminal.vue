@@ -322,8 +322,8 @@ const connectIO = () => {
     }, 3000)
     socket.value.emit('get_ping', host.value) // 获取服务端到客户端的ping值
     socket.value.on('ping_data', (pingMs) => {
-      const time = Number(pingMs?.time)?.toFixed(0) || 0
-      emit('ping-data', { host: host.value, time: Number.isNaN(time) ? '--' : time })
+      const time = Number(pingMs?.time)
+      emit('ping-data', { host: host.value, time: Number.isFinite(time) ? time.toFixed(0) : 0 })
     })
 
     socket.value.on('terminal_print_info', (msg) => {
