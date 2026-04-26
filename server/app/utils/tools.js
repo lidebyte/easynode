@@ -290,20 +290,32 @@ const isLoopbackIP = (ip) => {
   return firstOctet === 127
 }
 
+const isPrivateIPv4 = (ip) => {
+  if (!net.isIPv4(ip)) return false
+  const [first, second] = ip.split('.').map(Number)
+  return first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+}
+
+const isTrustedProxyIP = (ip) => {
+  ip = normalizeIP(ip)
+  return isLoopbackIP(ip) || isPrivateIPv4(ip) || ip === 'fc00::' || ip === 'fd00::'
+}
+
 /**
  * 从连接中提取可信客户端 IP：
  * - 优先使用 TCP 层真实地址（socketRemoteAddress），不可被客户端伪造
- * - 仅当该地址为 loopback（即经过本机可信反向代理）时，才从 x-forwarded-for 取客户端 IP
+ * - 当该地址来自可信代理（本机或 Docker/内网反代）时，才从 x-forwarded-for 取客户端 IP
  * - nginx 使用 proxy_add_x_forwarded_for 时会将真实 IP 追加到末尾，故取最后一个值
- *   以防御客户端在头部预置伪造 IP 的攻击（XFF 首个值可伪造，末尾值由代理追加不可伪造）
  */
 const getClientIP = (socketRemoteAddress, xForwardedFor) => {
   const socketIP = normalizeIP(socketRemoteAddress || '')
-  if (!isLoopbackIP(socketIP)) return socketIP
+  if (!isTrustedProxyIP(socketIP)) return socketIP
   if (!xForwardedFor) return socketIP
-  const parts = xForwardedFor.split(',')
-  const last = parts[parts.length - 1].trim()
-  return normalizeIP(last) || socketIP
+
+  const parts = xForwardedFor.split(',').map(item => normalizeIP(item)).filter(Boolean)
+  return parts[parts.length - 1] || socketIP
 }
 
 const isAllowedIp = (requestIP) => {
