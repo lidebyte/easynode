@@ -271,6 +271,41 @@ const isProd = () => {
   return EXEC_ENV === 'production'
 }
 
+// 将 IPv6 映射的 IPv4 地址（::ffff:x.x.x.x）规范化为纯 IPv4，保证比较一致性
+const normalizeIP = (ip) => {
+  if (typeof ip !== 'string') return ''
+  ip = ip.trim().toLowerCase()
+  if (ip.startsWith('::ffff:')) {
+    const ipv4Part = ip.slice(7)
+    if (net.isIPv4(ipv4Part)) return ipv4Part
+  }
+  return ip
+}
+
+const isLoopbackIP = (ip) => {
+  ip = normalizeIP(ip)
+  if (ip === '::1') return true
+  if (!net.isIPv4(ip)) return false
+  const firstOctet = Number(ip.split('.')[0])
+  return firstOctet === 127
+}
+
+/**
+ * 从连接中提取可信客户端 IP：
+ * - 优先使用 TCP 层真实地址（socketRemoteAddress），不可被客户端伪造
+ * - 仅当该地址为 loopback（即经过本机可信反向代理）时，才从 x-forwarded-for 取客户端 IP
+ * - nginx 使用 proxy_add_x_forwarded_for 时会将真实 IP 追加到末尾，故取最后一个值
+ *   以防御客户端在头部预置伪造 IP 的攻击（XFF 首个值可伪造，末尾值由代理追加不可伪造）
+ */
+const getClientIP = (socketRemoteAddress, xForwardedFor) => {
+  const socketIP = normalizeIP(socketRemoteAddress || '')
+  if (!isLoopbackIP(socketIP)) return socketIP
+  if (!xForwardedFor) return socketIP
+  const parts = xForwardedFor.split(',')
+  const last = parts[parts.length - 1].trim()
+  return normalizeIP(last) || socketIP
+}
+
 const isAllowedIp = (requestIP) => {
   let allowedIPs = Array.isArray(global.ALLOWED_IPS) ? global.ALLOWED_IPS : []
   if (allowedIPs.length === 0) return true
@@ -378,6 +413,8 @@ module.exports = {
   getLocalNetIP,
   throwError,
   isIP,
+  isLocalIP,
+  isLoopbackIP,
   randomStr,
   getUTCDate,
   formatTimestamp,
@@ -385,6 +422,8 @@ module.exports = {
   shellThrottle,
   fileTransferThrottle,
   isProd,
+  normalizeIP,
+  getClientIP,
   isAllowedIp,
   ping,
   requestWithFailover,

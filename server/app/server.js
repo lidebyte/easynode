@@ -12,7 +12,7 @@ const wsDocker = require('./socket/docker')
 const wsOnekey = require('./socket/onekey')
 const wsServerStatus = require('./socket/server-status')
 const wsFileTransfer = require('./socket/file-transfer')
-const { throwError, isAllowedIp } = require('./utils/tools')
+const { throwError, isAllowedIp, getClientIP } = require('./utils/tools')
 const { SessionDB } = require('./utils/db-class')
 const { parseCookies } = require('./utils/verify-auth')
 const { generateSelfSignedCert } = require('./utils/ssl-cert')
@@ -89,8 +89,7 @@ const createServer = () => {
     if (request.url.startsWith('/rdp-proxy')) {
       try {
       // 验证 IP 白名单
-        const requestIP = request.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                          request.socket.remoteAddress
+        const requestIP = getClientIP(request.socket.remoteAddress, request.headers['x-forwarded-for'])
         if (!isAllowedIp(requestIP)) {
           logger.warn(`RDP 连接被拒绝: IP ${ requestIP } 不在白名单中`)
           socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')

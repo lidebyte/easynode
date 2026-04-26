@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken')
 const { AESDecryptAsync } = require('./encrypt')
-const { isAllowedIp } = require('../utils/tools')
+const { isAllowedIp, getClientIP } = require('../utils/tools')
 const { SHA256Encrypt } = require('../utils/encrypt')
 const { KeyDB, SessionDB } = require('./db-class')
 const keyDB = new KeyDB().getInstance()
@@ -58,7 +58,7 @@ const verifyAuthSync = async (token, session) => {
 }
 
 const verifyWsAuthSync = async (socket, next) => {
-  const requestIP = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address
+  const requestIP = getClientIP(socket.conn.remoteAddress, socket.handshake.headers['x-forwarded-for'])
   // console.log('ws terminal requestIP:', requestIP)
   // IP 白名单检查
   if (!isAllowedIp(requestIP)) {

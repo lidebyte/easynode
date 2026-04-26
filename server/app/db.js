@@ -18,7 +18,8 @@ async function initKeyDB() {
     const { _id, ipWhiteList = [] } = keyData
     try {
       let { ipWhiteList = [] } = await keyDB.findOneAsync({})
-      if (ipWhiteList.filter(ip => Boolean(ip)).length > 0) global.ALLOWED_IPS = ipWhiteList
+      const filteredList = ipWhiteList.filter(ip => typeof ip === 'string' && ip.trim() !== '')
+      if (filteredList.length > 0) global.ALLOWED_IPS = filteredList
     } catch (error) {
       logger.error('设置全局IP白名单失败:', error)
     }
