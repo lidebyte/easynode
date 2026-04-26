@@ -728,6 +728,54 @@ const loading = ref(false)
 const connectionStatus = ref('connecting') // connecting, connected, failed, reconnecting
 const connectionError = ref('')
 
+const SFTP_SOCKET_EVENTS = {
+  CONNECT_SUCCESS: 'connect_success',
+  CONNECT_FAIL: 'connect_fail',
+  DIR_LS: 'dir_ls',
+  NOT_EXISTS_DIR: 'not_exists_dir',
+  RENAME_SUCCESS: 'rename_success',
+  RENAME_FAIL: 'rename_fail',
+  DELETE_SUCCESS: 'delete_success',
+  DELETE_FAIL: 'delete_fail',
+  MOVE_SUCCESS: 'move_success',
+  MOVE_FAIL: 'move_fail',
+  COPY_SUCCESS: 'copy_success',
+  COPY_FAIL: 'copy_fail',
+  CREATE_SUCCESS: 'create_success',
+  CREATE_FAIL: 'create_fail',
+  COMPRESS_SUCCESS: 'compress_success',
+  COMPRESS_FAIL: 'compress_fail',
+  DECOMPRESS_SUCCESS: 'decompress_success',
+  DECOMPRESS_FAIL: 'decompress_fail',
+  FAVORITES_LIST: 'favorites_list',
+  FAVORITE_ADDED: 'favorite_added',
+  FAVORITE_REMOVED: 'favorite_removed',
+  FAVORITE_ERROR: 'favorite_error',
+  SYMLINK_RESOLVED: 'symlink_resolved',
+  SYMLINK_RESOLVE_ERROR: 'symlink_resolve_error',
+  DOWNLOAD_STARTED: 'download_started',
+  DOWNLOAD_PROGRESS: 'download_progress',
+  DOWNLOAD_READY: 'download_ready',
+  DOWNLOAD_FAIL: 'download_fail',
+  DOWNLOAD_CANCELLED: 'download_cancelled',
+  UPLOAD_STARTED: 'upload_started',
+  UPLOAD_PROGRESS: 'upload_progress',
+  UPLOAD_COMPLETE: 'upload_complete',
+  UPLOAD_FAIL: 'upload_fail',
+  UPLOAD_CANCELLED: 'upload_cancelled',
+  UPLOAD_CHUNK_SUCCESS: 'upload_chunk_success',
+  UPLOAD_CHUNK_FAIL: 'upload_chunk_fail',
+  SHELL_CONNECTION_ERROR: 'shell_connection_error',
+  IMAGE_CONTENT: 'image_content',
+  IMAGE_READ_ERROR: 'image_read_error',
+}
+
+const sftpSocketEvents = Object.values(SFTP_SOCKET_EVENTS)
+
+const removeSftpSocketEvents = (targetSocket) => {
+  sftpSocketEvents.forEach(event => targetSocket.removeAllListeners(event))
+}
+
 // 路径切换状态管理
 const previousPath = ref('') // 用于错误回滚
 const pendingPath = ref('') // 待确认的路径
@@ -957,10 +1005,13 @@ const connectSftp = () => {
     reconnectionAttempts: 0
   })
 
-  socket.value.on('connect', () => {
-    socket.value.emit('ws_sftp', { hostId: props.hostId })
+  const currentSocket = socket.value
 
-    socket.value.on('connect_success', ({ rootList, isRootUser, currentPath: serverCurrentPath }) => {
+  currentSocket.on('connect', () => {
+    removeSftpSocketEvents(currentSocket)
+    currentSocket.emit('ws_sftp', { hostId: props.hostId })
+
+    currentSocket.on(SFTP_SOCKET_EVENTS.CONNECT_SUCCESS, ({ rootList, isRootUser, currentPath: serverCurrentPath }) => {
       fileListRaw.value = rootList
       // 根据用户权限设置正确的初始路径
       currentPath.value = serverCurrentPath || (isRootUser ? '/' : '~')
@@ -974,7 +1025,7 @@ const connectSftp = () => {
       getFavoriteList()
     })
 
-    socket.value.on('connect_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.CONNECT_FAIL, (msg) => {
       connectionStatus.value = 'failed'
       connectionError.value = msg
       loading.value = false
@@ -983,7 +1034,7 @@ const connectSftp = () => {
       pendingPath.value = ''
     })
 
-    socket.value.on('dir_ls', (dirLs, path) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DIR_LS, (dirLs, path) => {
       fileListRaw.value = dirLs
       loading.value = false
 
@@ -995,7 +1046,7 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('not_exists_dir', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.NOT_EXISTS_DIR, (msg) => {
       if (msg) $message.warning(msg)
       loading.value = false
 
@@ -1007,49 +1058,49 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('rename_success', () => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.RENAME_SUCCESS, () => {
       $message.success('重命名成功')
       loading.value = false
       cancelRename()
     })
 
-    socket.value.on('rename_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.RENAME_FAIL, (msg) => {
       $message.error(`重命名失败: ${ msg }`)
       loading.value = false
       cancelRename()
     })
 
-    socket.value.on('delete_success', () => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DELETE_SUCCESS, () => {
       $message.success('删除成功')
       loading.value = false
     })
 
-    socket.value.on('delete_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DELETE_FAIL, (msg) => {
       $message.error(`删除失败: ${ msg }`)
       loading.value = false
     })
 
-    socket.value.on('move_success', () => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.MOVE_SUCCESS, () => {
       $message.success('移动成功')
       loading.value = false
     })
 
-    socket.value.on('move_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.MOVE_FAIL, (msg) => {
       $message.error(`移动失败: ${ msg }`)
       loading.value = false
     })
 
-    socket.value.on('copy_success', () => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.COPY_SUCCESS, () => {
       $message.success('复制成功')
       loading.value = false
     })
 
-    socket.value.on('copy_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.COPY_FAIL, (msg) => {
       $message.error(`复制失败: ${ msg }`)
       loading.value = false
     })
 
-    socket.value.on('create_success', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.CREATE_SUCCESS, (msg) => {
       $message.success(msg || '创建成功')
       loading.value = false
 
@@ -1077,58 +1128,58 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('create_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.CREATE_FAIL, (msg) => {
       $message.error(`创建失败: ${ msg }`)
       loading.value = false
     })
 
-    socket.value.on('compress_success', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.COMPRESS_SUCCESS, (msg) => {
       $message.success(msg || '压缩成功')
       loading.value = false
       refresh()
     })
 
-    socket.value.on('compress_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.COMPRESS_FAIL, (msg) => {
       $message.error(`压缩失败: ${ msg }`)
       loading.value = false
     })
 
-    socket.value.on('decompress_success', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DECOMPRESS_SUCCESS, (msg) => {
       $message.success(msg || '解压成功')
       loading.value = false
       refresh()
     })
 
-    socket.value.on('decompress_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DECOMPRESS_FAIL, (msg) => {
       $message.error(`解压失败: ${ msg }`)
       loading.value = false
     })
 
     // 收藏相关事件
-    socket.value.on('favorites_list', (favorites) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.FAVORITES_LIST, (favorites) => {
       favoriteList.value = favorites
     })
 
-    socket.value.on('favorite_added', (message) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.FAVORITE_ADDED, (message) => {
       $message.success(message || '收藏成功')
       getFavoriteList()
       // 刷新文件列表以更新星标显示
       refresh()
     })
 
-    socket.value.on('favorite_removed', (message) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.FAVORITE_REMOVED, (message) => {
       $message.success(message || '取消收藏成功')
       getFavoriteList()
       // 刷新文件列表以更新星标显示
       refresh()
     })
 
-    socket.value.on('favorite_error', (message) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.FAVORITE_ERROR, (message) => {
       $message.error(`收藏操作失败: ${ message }`)
     })
 
     // 软链接解析相关事件
-    socket.value.on('symlink_resolved', ({ realPath, isDirectory, symlinkPath }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.SYMLINK_RESOLVED, ({ realPath, isDirectory, symlinkPath }) => {
       console.log('解析软链接成功:', realPath, isDirectory, symlinkPath)
       loading.value = false
 
@@ -1144,7 +1195,7 @@ const connectSftp = () => {
         if (isImageFile(fileName)) {
           // 使用socket请求图片数据
           loading.value = true
-          socket.value.emit('read_image', {
+          socket.value?.emit('read_image', {
             filePath: realPath,
             fileSize: 0 // 软链接文件大小需要从服务端获取
           })
@@ -1162,14 +1213,14 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('symlink_resolve_error', ({ error, symlinkPath }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.SYMLINK_RESOLVE_ERROR, ({ error, symlinkPath }) => {
       loading.value = false
       console.error('解析软链接失败:', error, symlinkPath)
       $message.error(`解析软链接失败: ${ error }`)
     })
 
     // 下载相关事件
-    socket.value.on('download_started', ({ taskId, fileName }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DOWNLOAD_STARTED, ({ taskId, fileName }) => {
       const newTask = {
         taskId,
         fileName,
@@ -1186,7 +1237,7 @@ const connectSftp = () => {
       showDownloadDialog.value = true
     })
 
-    socket.value.on('download_progress', ({ taskId, progress, downloadedSize, totalSize, speed, eta }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DOWNLOAD_PROGRESS, ({ taskId, progress, downloadedSize, totalSize, speed, eta }) => {
       const task = downloadTasks.value.get(taskId)
       if (task) {
         task.progress = progress
@@ -1197,7 +1248,7 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('download_ready', ({ taskId, fileName }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DOWNLOAD_READY, ({ taskId, fileName }) => {
       const task = downloadTasks.value.get(taskId)
       if (task) {
         task.status = 'completed'
@@ -1207,7 +1258,7 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('download_fail', (msg) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DOWNLOAD_FAIL, (msg) => {
       $message.error(`下载失败: ${ msg }`)
       loading.value = false
       // 清理失败的任务
@@ -1219,12 +1270,12 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('download_cancelled', ({ taskId }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.DOWNLOAD_CANCELLED, ({ taskId }) => {
       downloadTasks.value.delete(taskId)
     })
 
     // 上传相关事件
-    socket.value.on('upload_started', ({ taskId, fileName }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.UPLOAD_STARTED, ({ taskId, fileName }) => {
       const task = uploadTasks.value.get(taskId)
       if (task) {
         task.status = 'uploading'
@@ -1233,7 +1284,7 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('upload_progress', ({ taskId, chunkProgress, chunkUploadedSize, chunkTotalSize, sftpProgress, sftpUploadedSize, sftpTotalSize, speed, eta, stage }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.UPLOAD_PROGRESS, ({ taskId, chunkProgress, chunkUploadedSize, chunkTotalSize, sftpProgress, sftpUploadedSize, sftpTotalSize, speed, eta, stage }) => {
       const task = uploadTasks.value.get(taskId)
       if (task) {
         // 分片上传进度
@@ -1256,7 +1307,7 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('upload_complete', ({ taskId, fileName }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.UPLOAD_COMPLETE, ({ taskId, fileName }) => {
       const task = uploadTasks.value.get(taskId)
       if (task) {
         task.status = 'completed'
@@ -1267,7 +1318,7 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('upload_fail', ({ taskId, error }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.UPLOAD_FAIL, ({ taskId, error }) => {
       const task = uploadTasks.value.get(taskId)
       if (task) {
         task.status = 'failed'
@@ -1276,15 +1327,15 @@ const connectSftp = () => {
       }
     })
 
-    socket.value.on('upload_cancelled', ({ taskId }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.UPLOAD_CANCELLED, ({ taskId }) => {
       uploadTasks.value.delete(taskId)
     })
 
-    // socket.value.on('upload_chunk_success', ({ taskId, chunkIndex }) => {
+    // socket.value.on(SFTP_SOCKET_EVENTS.UPLOAD_CHUNK_SUCCESS, ({ taskId, chunkIndex }) => {
     //   // 分片上传成功，无需特殊处理
     // })
 
-    socket.value.on('upload_chunk_fail', ({ taskId, chunkIndex, error }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.UPLOAD_CHUNK_FAIL, ({ taskId, chunkIndex, error }) => {
       const task = uploadTasks.value.get(taskId)
       if (task) {
         task.status = 'failed'
@@ -1294,7 +1345,7 @@ const connectSftp = () => {
     })
 
     // SSH连接错误处理
-    socket.value.on('shell_connection_error', ({ message, code }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.SHELL_CONNECTION_ERROR, ({ message, code }) => {
       console.error('SFTP连接shell终端错误：', message, 'Code:', code)
       connectionStatus.value = 'failed'
       connectionError.value = message
@@ -1302,7 +1353,7 @@ const connectSftp = () => {
     })
 
     // 图片预览相关事件
-    socket.value.on('image_content', ({ imageUrl, filePath, fileName, fileSize }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.IMAGE_CONTENT, ({ imageUrl, filePath, fileName, fileSize }) => {
       console.log('收到图片URL:', { filePath, fileName, fileSize, imageUrl })
 
       if (!imageUrl) {
@@ -1324,7 +1375,7 @@ const connectSftp = () => {
       loading.value = false
     })
 
-    socket.value.on('image_read_error', ({ error, filePath }) => {
+    currentSocket.on(SFTP_SOCKET_EVENTS.IMAGE_READ_ERROR, ({ error, filePath }) => {
       console.error('图片读取错误:', error, filePath)
       $message.error(`图片预览失败: ${ error }`)
       loading.value = false
@@ -1332,7 +1383,7 @@ const connectSftp = () => {
   })
 
   // 添加断开连接监听，实现自动重连
-  socket.value.on('disconnect', (reason) => {
+  currentSocket.on('disconnect', (reason) => {
     console.warn('SFTP连接断开:', reason)
     // 清空路径状态
     previousPath.value = ''
@@ -1348,7 +1399,7 @@ const connectSftp = () => {
     }
   })
 
-  socket.value.on('connect_error', (err) => {
+  currentSocket.on('connect_error', (err) => {
     console.error('sftp-v2 websocket 连接错误：', err)
     connectionStatus.value = 'failed'
     connectionError.value = 'WebSocket连接失败，请检查网络或服务器状态'
@@ -2330,7 +2381,7 @@ const navigateToFavorite = (favorite) => {
     if (isImageFile(favorite.name)) {
       // 图片文件：直接打开预览
       loading.value = true
-      socket.value.emit('read_image', {
+      socket.value?.emit('read_image', {
         filePath: favorite.path,
         fileSize: 0 // 收藏中没有保存大小信息，从服务端获取
       })
@@ -2537,8 +2588,8 @@ const performFileUpload = async (task) => {
         const handleSuccess = ({ taskId: responseTaskId, chunkIndex }) => {
           if (responseTaskId === task.taskId && chunkIndex === i) {
             clearTimeout(timeout)
-            socket.value.off('upload_chunk_success', handleSuccess)
-            socket.value.off('upload_chunk_fail', handleFail)
+            socket.value.off(SFTP_SOCKET_EVENTS.UPLOAD_CHUNK_SUCCESS, handleSuccess)
+            socket.value.off(SFTP_SOCKET_EVENTS.UPLOAD_CHUNK_FAIL, handleFail)
             resolve()
           }
         }
@@ -2546,14 +2597,14 @@ const performFileUpload = async (task) => {
         const handleFail = ({ taskId: responseTaskId, chunkIndex, error }) => {
           if (responseTaskId === task.taskId && chunkIndex === i) {
             clearTimeout(timeout)
-            socket.value.off('upload_chunk_success', handleSuccess)
-            socket.value.off('upload_chunk_fail', handleFail)
+            socket.value.off(SFTP_SOCKET_EVENTS.UPLOAD_CHUNK_SUCCESS, handleSuccess)
+            socket.value.off(SFTP_SOCKET_EVENTS.UPLOAD_CHUNK_FAIL, handleFail)
             reject(new Error(error))
           }
         }
 
-        socket.value.on('upload_chunk_success', handleSuccess)
-        socket.value.on('upload_chunk_fail', handleFail)
+        socket.value.on(SFTP_SOCKET_EVENTS.UPLOAD_CHUNK_SUCCESS, handleSuccess)
+        socket.value.on(SFTP_SOCKET_EVENTS.UPLOAD_CHUNK_FAIL, handleFail)
       })
     }
 
