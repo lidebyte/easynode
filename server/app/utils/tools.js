@@ -283,11 +283,9 @@ const normalizeIP = (ip) => {
 }
 
 const isLoopbackIP = (ip) => {
-  ip = normalizeIP(ip)
   if (ip === '::1') return true
   if (!net.isIPv4(ip)) return false
-  const firstOctet = Number(ip.split('.')[0])
-  return firstOctet === 127
+  return Number(ip.split('.')[0]) === 127
 }
 
 const isPrivateIPv4 = (ip) => {
@@ -298,9 +296,13 @@ const isPrivateIPv4 = (ip) => {
     (first === 192 && second === 168)
 }
 
+const isUniqueLocalIPv6 = (ip) => {
+  return net.isIPv6(ip) && /^f[cd][0-9a-f]{2}:/i.test(ip)
+}
+
 const isTrustedProxyIP = (ip) => {
   ip = normalizeIP(ip)
-  return isLoopbackIP(ip) || isPrivateIPv4(ip) || ip === 'fc00::' || ip === 'fd00::'
+  return isLoopbackIP(ip) || isPrivateIPv4(ip) || isUniqueLocalIPv6(ip)
 }
 
 /**
