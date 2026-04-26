@@ -2236,7 +2236,7 @@ const handleDockerComposeAction = (row, action) => {
       command = `docker compose -f ${ fullPath } pull && docker compose -f ${ fullPath } down && docker compose -f ${ fullPath } up -d\n`
       break
     case 'logs':
-      command = `docker compose -f ${ fullPath } logs -f\n`
+      command = `docker compose -f ${ fullPath } logs --tail=500 -f\n`
       break
     default:
       $message.error('未知操作')

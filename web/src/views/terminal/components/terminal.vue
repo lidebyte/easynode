@@ -759,7 +759,7 @@ const handleRightClick = async (e) => {
         onClick: () => {
           if (!plusTips()) return
           focusTab()
-          inputCommand(`docker logs -f ${ str }`)
+          inputCommand(`docker logs --tail=500 -f ${ str }`)
         }
       },
     ]
