@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/api/api_result.dart';
 import '../../core/ui/app_color_theme.dart';
 import '../../core/ui/refresh_feedback.dart';
+import '../../core/ui/top_notice.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/api_providers.dart';
 import '../../state/auth_notifier.dart';
@@ -73,12 +74,9 @@ class _ServersTabState extends ConsumerState<ServersTab> {
     if (!ref.read(isPlusActiveProvider) &&
         (server.proxyType == 'proxyServer' ||
             server.proxyType == 'jumpHosts')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context).tr('servers.connectPlusRequired'),
-          ),
-        ),
+      showTopNotice(
+        context,
+        AppLocalizations.of(context).tr('plus.serverManagedTip'),
       );
       return;
     }
@@ -587,7 +585,9 @@ class _GroupPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final background = selected ? context.colors.primary : Colors.transparent;
-    final foreground = selected ? context.colors.fontOnPrimary : context.colors.muted;
+    final foreground = selected
+        ? context.colors.fontOnPrimary
+        : context.colors.muted;
     return Material(
       color: background,
       shape: RoundedRectangleBorder(
@@ -1232,7 +1232,10 @@ class _MessageState extends StatelessWidget {
   }
 }
 
-InputDecoration _searchFieldDecoration(BuildContext context, {required String hintText}) {
+InputDecoration _searchFieldDecoration(
+  BuildContext context, {
+  required String hintText,
+}) {
   return InputDecoration(
     hintText: hintText,
     isDense: true,

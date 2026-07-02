@@ -264,14 +264,14 @@ class _TerminalBottomBarState extends ConsumerState<TerminalBottomBar> {
     widget.onFocusTerminal?.call();
   }
 
-  Future<void> _showSftp(BuildContext context) {
+  Future<void> _showSftp(BuildContext context) async {
     final l = AppLocalizations.of(context);
-    return showModalBottomSheet<void>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.34),
-      builder: (_) => FractionallySizedBox(
+      builder: (sheetContext) => FractionallySizedBox(
         heightFactor: 0.90,
         child: _TerminalSheetFrame(
           title: l.tr('terminal.menu.sftp'),
@@ -291,10 +291,12 @@ class _TerminalBottomBarState extends ConsumerState<TerminalBottomBar> {
                   ?.controller
                   .writeInput(command);
             },
+            onCommandPanelClose: () => Navigator.of(sheetContext).pop(),
           ),
         ),
       ),
     );
+    widget.onFocusTerminal?.call();
   }
 
   Future<void> _showDocker(BuildContext context) async {

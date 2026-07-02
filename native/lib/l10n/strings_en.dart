@@ -71,10 +71,6 @@ const Map<String, String> stringsEn = {
   'servers.notConfigured': 'Not configured',
   'servers.fetchSshFailed': 'Failed to get SSH config: {0}',
   'servers.windowsUnsupported': 'Windows connections are not supported yet.',
-  'servers.connectPlusRequired':
-      'This connection capability is not enabled by the connected server.',
-  'servers.proxyPlusTip':
-      'This proxy capability is not enabled by the connected server.',
   'servers.activeTerminalsOne': '1 active terminal',
   'servers.activeTerminalsMany': '{0} active terminals',
   'servers.closeAllTitle': 'Close all terminals?',
@@ -200,9 +196,6 @@ const Map<String, String> stringsEn = {
   'sftp.compose.rebuild': 'Rebuild',
   'sftp.compose.upgrade': 'Upgrade',
   'sftp.compose.logs': 'Logs',
-  'sftp.compose.plusRequired':
-      'This capability is not enabled by the connected server.',
-
   // Docker
   'docker.emptyTitle': 'No server selected',
   'docker.emptyBody': 'Choose a Linux server to manage Docker containers.',
@@ -217,9 +210,7 @@ const Map<String, String> stringsEn = {
   'docker.statusDisconnected': 'Not connected',
   'docker.connecting': 'Connecting Docker...',
   'docker.noContainers': 'No containers found.',
-  'docker.plusRequired': 'Docker management requires server authorization.',
   'docker.connectFailed': 'Docker service connection failed.',
-  'docker.notPlus': 'Docker management is not enabled on this server.',
   'docker.refresh': 'Refresh',
   'docker.logs': 'Logs',
   'docker.start': 'Start',
@@ -255,8 +246,6 @@ const Map<String, String> stringsEn = {
   'scripts.groupsHint': 'Groups organize your scripts.',
   'scripts.groupsHintBody':
       'Deleting a group moves its scripts to the default group.',
-  'scripts.groupsPlusTip':
-      'This capability is not enabled by the connected server.',
   'scripts.addGroup': 'Add group',
   'scripts.editGroup': 'Edit group',
   'scripts.groupName': 'Group name',
@@ -309,9 +298,8 @@ const Map<String, String> stringsEn = {
   'settings.section.connection': 'Credentials & Connection',
   'settings.section.preferences': 'Preferences',
 
-  'settings.plus.title': 'Plus features',
-  'settings.plus.inactiveMeta': 'Server authorization is not active',
-  'settings.plus.goActivate': 'View status',
+  'plus.serverManagedTip':
+      'This feature requires authorization from the connected server.',
 
   'settings.account.title': 'Account & password',
   'settings.account.subtitle': 'Username, password and MFA2',
@@ -354,43 +342,6 @@ const Map<String, String> stringsEn = {
 
   'settings.notifications.tooltip': 'Notifications',
   'settings.notifications.empty': 'No notifications yet',
-
-  // Plus subscription
-  'plus.activate': 'Update authorization',
-  'plus.keyLabel': 'Authorization Key',
-  'plus.keyHint': 'Enter the server authorization key',
-  'plus.keyTooShort': 'Please enter a valid authorization key',
-  'plus.activateSuccess': 'Authorization updated',
-  'plus.activateFailed': 'Authorization update failed',
-  'plus.needRestart':
-      'Authorization is occupied by another instance. Please restart the panel service and retry',
-  'plus.fetchKey': 'Open authorization page',
-  'plus.fetchKeyHint': 'Copied authorization URL to clipboard: {0}',
-  'plus.featuresTitle': 'Plus features',
-  'plus.featuresSection': 'Plus features',
-  'plus.section.activate': 'Authorization',
-  'plus.section.status': 'Authorization status',
-  'plus.activateHint': 'Authorization is configured on your EasyNode server.',
-  'plus.discountTip': 'Service notice',
-  'plus.loadFailed': 'Failed to load Plus info: {0}',
-  'plus.status.active': 'Server authorization active',
-  'plus.status.inactive': 'Server authorization inactive',
-  'plus.status.serverManagedHint':
-      'Authorization is managed by the connected self-hosted server.',
-  'plus.status.label': 'Status',
-  'plus.status.instance': 'Instance',
-  'plus.feature.ai.title': 'AI Chat',
-  'plus.feature.ai.desc': 'Built-in AI assistant for terminals',
-  'plus.feature.proxy.title': 'Proxy & jump hosts',
-  'plus.feature.proxy.desc': 'Proxy servers and jump host hops',
-  'plus.feature.rdp.title': 'RDP remote desktop',
-  'plus.feature.rdp.desc': 'Windows RDP access',
-  'plus.feature.transfer.title': 'File transfer',
-  'plus.feature.transfer.desc': 'Direct file transfer between hosts',
-  'plus.feature.advanced.title': 'Advanced terminal',
-  'plus.feature.advanced.desc': 'Session suspend, batch tasks, Docker',
-  'plus.feature.web.title': 'More on web',
-  'plus.feature.web.desc': 'Explore the full Plus feature set on web',
 
   // Sessions
   'sessions.ipWhitelistTitle': 'IP whitelist',
@@ -486,8 +437,6 @@ const Map<String, String> stringsEn = {
 
   // Proxy
   'proxy.plusTipTitle': 'Server authorization required',
-  'proxy.plusTipBody':
-      'This capability is not enabled by the connected server.',
   'proxy.add': 'Add proxy',
   'settings.proxy.add': 'Add',
   'proxy.edit': 'Edit proxy',

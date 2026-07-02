@@ -18,8 +18,8 @@ class SettingsRepository {
     required this.publicKeyPem,
     CryptoJsAes? aes,
     RsaCrypto? rsa,
-  })  : _aes = aes ?? CryptoJsAes(),
-        _rsa = rsa ?? RsaCrypto();
+  }) : _aes = aes ?? CryptoJsAes(),
+       _rsa = rsa ?? RsaCrypto();
 
   final ApiClient apiClient;
   final String publicKeyPem;
@@ -82,16 +82,6 @@ class SettingsRepository {
     return PlusInfo.fromJson(Map<String, dynamic>.from(raw));
   }
 
-  Future<String> getPlusKey() async {
-    final res = await apiClient.getJson('/plus-conf');
-    final raw = res['data'];
-    return raw == null ? '' : raw.toString();
-  }
-
-  Future<void> updatePlusKey(String key) async {
-    await apiClient.postJson('/plus-conf', {'key': key});
-  }
-
   Future<PlusDiscount> getPlusDiscount() async {
     try {
       final res = await apiClient.getJson('/plus-discount');
@@ -141,13 +131,13 @@ class SettingsRepository {
   }
 
   Map<String, dynamic> _proxyBody(ServerProxyModel proxy) => {
-        'type': proxy.type,
-        'name': proxy.name,
-        'host': proxy.host,
-        'port': proxy.port,
-        'username': proxy.username,
-        'password': proxy.password,
-      };
+    'type': proxy.type,
+    'name': proxy.name,
+    'host': proxy.host,
+    'port': proxy.port,
+    'username': proxy.username,
+    'password': proxy.password,
+  };
 
   // ---- Credentials CRUD ----
 

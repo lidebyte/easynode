@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/ui/app_color_theme.dart';
 import '../../core/ui/refresh_feedback.dart';
+import '../../core/ui/top_notice.dart';
 import '../../core/utils/app_store_compliance.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/auth_notifier.dart';
@@ -20,7 +21,6 @@ import '../settings/account_security_page.dart';
 import '../settings/app_update_prompt.dart';
 import '../settings/credentials_page.dart';
 import '../settings/models/plus_info.dart';
-import '../settings/plus_subscription_page.dart';
 import '../settings/proxy_page.dart';
 import '../settings/sessions_page.dart';
 import '../settings/widgets/settings_row.dart';
@@ -153,7 +153,7 @@ class SettingsTab extends ConsumerWidget {
                     content: discount.content,
                     onTap: () {
                       Navigator.of(sheetContext).pop();
-                      _push(context, const PlusSubscriptionPage());
+                      _showPlusServerManagedTip(context);
                     },
                   )
                 else ...[
@@ -166,10 +166,7 @@ class SettingsTab extends ConsumerWidget {
                   Text(
                     l.tr('settings.notifications.empty'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: c.muted,
-                    ),
+                    style: TextStyle(fontSize: 13, color: c.muted),
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -181,6 +178,11 @@ class SettingsTab extends ConsumerWidget {
     );
   }
 
+  void _showPlusServerManagedTip(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    showTopNotice(context, l.tr('plus.serverManagedTip'));
+  }
+
   void _showThemePicker(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
     final current = ref.read(themeModeProvider);
@@ -190,7 +192,11 @@ class SettingsTab extends ConsumerWidget {
         title: Text(l.tr('settings.theme.title')),
         children: [
           for (final entry in [
-            (ThemeMode.system, l.tr('settings.theme.system'), Icons.brightness_auto),
+            (
+              ThemeMode.system,
+              l.tr('settings.theme.system'),
+              Icons.brightness_auto,
+            ),
             (ThemeMode.light, l.tr('settings.theme.light'), Icons.light_mode),
             (ThemeMode.dark, l.tr('settings.theme.dark'), Icons.dark_mode),
           ])
@@ -347,7 +353,7 @@ class SettingsTab extends ConsumerWidget {
                   credentialCount: credentialCount,
                   scriptCount: scriptCount,
                   plusActive: plusActive,
-                  onPlusTap: () => _push(context, const PlusSubscriptionPage()),
+                  onPlusTap: () => _showPlusServerManagedTip(context),
                   onLogoutTap: () => _confirmLogout(context, ref),
                 ),
               ),
@@ -409,7 +415,10 @@ class SettingsTab extends ConsumerWidget {
                     SettingsRow(
                       icon: Icons.palette_outlined,
                       title: l.tr('settings.theme.title'),
-                      subtitle: _themeModeLabel(l, ref.watch(themeModeProvider)),
+                      subtitle: _themeModeLabel(
+                        l,
+                        ref.watch(themeModeProvider),
+                      ),
                       onTap: () => _showThemePicker(context, ref),
                     ),
                     SettingsRow(
@@ -578,10 +587,7 @@ class _ProfileCard extends StatelessWidget {
                         serverAddress,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.softMuted,
-                        ),
+                        style: TextStyle(fontSize: 12, color: colors.softMuted),
                       ),
                     ],
                   ),
@@ -668,7 +674,6 @@ class _StatDivider extends StatelessWidget {
   }
 }
 
-
 class _PlusBadge extends StatelessWidget {
   const _PlusBadge({required this.active, required this.onTap});
 
@@ -700,7 +705,6 @@ class _PlusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
     final image = Image.asset(
       'assets/plus.png',
       width: 36,
@@ -708,30 +712,13 @@ class _PlusBadge extends StatelessWidget {
       fit: BoxFit.contain,
     );
     return InkWell(
-      onTap: onTap,
+      onTap: active ? null : onTap,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            active
-                ? image
-                : ColorFiltered(colorFilter: _grayscale, child: image),
-            if (!active) ...[
-              const SizedBox(width: 6),
-              Text(
-                l.tr('settings.plus.goActivate'),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: context.colors.accent,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ],
-          ],
-        ),
+        child: active
+            ? image
+            : ColorFiltered(colorFilter: _grayscale, child: image),
       ),
     );
   }
@@ -824,11 +811,7 @@ class _DiscountNotificationCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.local_offer_outlined,
-              size: 18,
-              color: colors.danger,
-            ),
+            Icon(Icons.local_offer_outlined, size: 18, color: colors.danger),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -842,11 +825,7 @@ class _DiscountNotificationCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: colors.danger,
-            ),
+            Icon(Icons.info_outline_rounded, size: 18, color: colors.danger),
           ],
         ),
       ),
@@ -999,10 +978,7 @@ class _TabOrderDialogState extends State<_TabOrderDialog> {
                   ),
                   trailing: ReorderableDragStartListener(
                     index: index,
-                    child: Icon(
-                      Icons.drag_handle,
-                      color: c.softMuted,
-                    ),
+                    child: Icon(Icons.drag_handle, color: c.softMuted),
                   ),
                 );
               },

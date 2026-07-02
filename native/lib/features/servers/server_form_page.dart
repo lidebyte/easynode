@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/ui/app_color_theme.dart';
+import '../../core/ui/top_notice.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/api_providers.dart';
 import '../../state/credential_list_notifier.dart';
@@ -45,7 +46,8 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
   @override
   void initState() {
     super.initState();
-    final hosts = ref.read(hostListProvider).valueOrNull ?? const <ServerModel>[];
+    final hosts =
+        ref.read(hostListProvider).valueOrNull ?? const <ServerModel>[];
     final maxIndex = hosts.fold<int>(
       0,
       (max, host) => host.index > max ? host.index : max,
@@ -87,9 +89,12 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final groups = ref.watch(groupListProvider).valueOrNull ?? const <ServerGroupModel>[];
-    final hosts = ref.watch(hostListProvider).valueOrNull ?? const <ServerModel>[];
-    final credentials = ref.watch(credentialListProvider).valueOrNull ??
+    final groups =
+        ref.watch(groupListProvider).valueOrNull ?? const <ServerGroupModel>[];
+    final hosts =
+        ref.watch(hostListProvider).valueOrNull ?? const <ServerModel>[];
+    final credentials =
+        ref.watch(credentialListProvider).valueOrNull ??
         const <ServerCredentialModel>[];
     final proxies =
         ref.watch(proxyListProvider).valueOrNull ?? const <ServerProxyModel>[];
@@ -104,7 +109,9 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
         backgroundColor: context.colors.canvas,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text(_form.isEdit ? l.tr('servers.editServer') : l.tr('servers.addServer')),
+        title: Text(
+          _form.isEdit ? l.tr('servers.editServer') : l.tr('servers.addServer'),
+        ),
       ),
       bottomNavigationBar: _BottomSaveBar(
         saving: _saving,
@@ -129,8 +136,9 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
                   value: _normalizeGroupValue(groups),
                   groups: groups,
                   onChanged: (value) => _form.group = value ?? 'default',
-                  validator: (value) =>
-                      value == null || value.isEmpty ? l.tr('servers.validation.group') : null,
+                  validator: (value) => value == null || value.isEmpty
+                      ? l.tr('servers.validation.group')
+                      : null,
                 ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,7 +147,8 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
                       child: _TextField(
                         controller: _nameCtrl,
                         label: l.tr('servers.field.name'),
-                        validator: (value) => _required(value, l.tr('servers.validation.name')),
+                        validator: (value) =>
+                            _required(value, l.tr('servers.validation.name')),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -171,7 +180,8 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
                         controller: _hostCtrl,
                         label: l.tr('servers.field.host'),
                         mono: true,
-                        validator: (value) => _required(value, l.tr('servers.validation.host')),
+                        validator: (value) =>
+                            _required(value, l.tr('servers.validation.host')),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -198,15 +208,16 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
                 if (_form.isSsh) ...[
                   _AuthTypeSegment(
                     value: _form.authType,
-                    onChanged: (value) => setState(() => _form.authType = value),
+                    onChanged: (value) =>
+                        setState(() => _form.authType = value),
                   ),
                   FormField<String>(
                     key: ValueKey('auth-${_form.authType}'),
                     initialValue: _form.credential,
                     validator: _form.authType == 'credential'
                         ? (value) => value == null || value.isEmpty
-                            ? l.tr('servers.validation.credential')
-                            : null
+                              ? l.tr('servers.validation.credential')
+                              : null
                         : null,
                     builder: (field) => AnimatedSize(
                       duration: const Duration(milliseconds: 180),
@@ -231,7 +242,9 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
                     controller: _passwordCtrl,
                     label: l.tr('servers.field.password'),
                     obscureText: true,
-                    helperText: _form.isEdit ? l.tr('servers.secretEditHint') : null,
+                    helperText: _form.isEdit
+                        ? l.tr('servers.secretEditHint')
+                        : null,
                   ),
               ],
             ),
@@ -259,10 +272,12 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
                           validator: _form.proxyType.isEmpty
                               ? null
                               : (value) => value == null || value.isEmpty
-                                  ? l.tr(_form.proxyType == 'jumpHosts'
-                                      ? 'servers.validation.jumpHosts'
-                                      : 'servers.validation.proxyServer')
-                                  : null,
+                                    ? l.tr(
+                                        _form.proxyType == 'jumpHosts'
+                                            ? 'servers.validation.jumpHosts'
+                                            : 'servers.validation.proxyServer',
+                                      )
+                                    : null,
                           builder: (field) => Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -276,7 +291,7 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    l.tr('servers.proxyPlusTip'),
+                                    l.tr('plus.serverManagedTip'),
                                     style: TextStyle(
                                       color: context.colors.softMuted,
                                       fontSize: 11,
@@ -381,9 +396,7 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
 
   void _showProxyPlusRequiredSnack() {
     final l = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l.tr('servers.proxyPlusTip'))),
-    );
+    showTopNotice(context, l.tr('plus.serverManagedTip'));
   }
 
   String? _normalizeGroupValue(List<ServerGroupModel> groups) {
@@ -433,18 +446,22 @@ class _ServerFormPageState extends ConsumerState<ServerFormPage> {
       ..command = _commandCtrl.text;
     try {
       final repo = ref.read(serverRepositoryProvider);
-      final message = _form.isEdit ? await repo.updateHost(_form) : await repo.createHost(_form);
+      final message = _form.isEdit
+          ? await repo.updateHost(_form)
+          : await repo.createHost(_form);
       await refreshServerSharedData(ref);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message == 'success' ? l.tr('common.saved') : message)),
+        SnackBar(
+          content: Text(message == 'success' ? l.tr('common.saved') : message),
+        ),
       );
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -513,10 +530,7 @@ class _CardSection extends StatelessWidget {
 }
 
 class _ConnectionTypeSegment extends StatelessWidget {
-  const _ConnectionTypeSegment({
-    required this.value,
-    required this.onChanged,
-  });
+  const _ConnectionTypeSegment({required this.value, required this.onChanged});
 
   final String value;
   final ValueChanged<String> onChanged;
@@ -543,10 +557,7 @@ class _ConnectionTypeSegment extends StatelessWidget {
 }
 
 class _AuthTypeSegment extends StatelessWidget {
-  const _AuthTypeSegment({
-    required this.value,
-    required this.onChanged,
-  });
+  const _AuthTypeSegment({required this.value, required this.onChanged});
 
   final String value;
   final ValueChanged<String> onChanged;
@@ -633,10 +644,7 @@ class _ProxyTypeSegment extends StatelessWidget {
 }
 
 class _SegmentShell extends StatelessWidget {
-  const _SegmentShell({
-    required this.children,
-    this.compact = false,
-  });
+  const _SegmentShell({required this.children, this.compact = false});
 
   final List<Widget> children;
   final bool compact;
@@ -722,10 +730,7 @@ class _SegmentButton extends StatelessWidget {
 }
 
 class _LabeledBlock extends StatelessWidget {
-  const _LabeledBlock({
-    required this.label,
-    required this.child,
-  });
+  const _LabeledBlock({required this.label, required this.child});
 
   final String label;
   final Widget child;
@@ -878,8 +883,8 @@ class _AuthField extends StatelessWidget {
           meta: selected == null
               ? null
               : selected.authType == 'privateKey'
-                  ? l.tr('servers.auth.privateKey')
-                  : l.tr('servers.auth.password'),
+              ? l.tr('servers.auth.privateKey')
+              : l.tr('servers.auth.password'),
           placeholder: l.tr('servers.credentials.empty'),
           enabled: credentials.isNotEmpty,
           errorText: errorText,
@@ -921,7 +926,6 @@ class _AuthField extends StatelessWidget {
       ],
     );
   }
-
 }
 
 class _ProxySelector extends StatelessWidget {
@@ -1121,7 +1125,9 @@ class _PickerField extends StatelessWidget {
                 Icon(
                   leadingIcon,
                   size: 18,
-                  color: enabled ? context.colors.primary : context.colors.softMuted,
+                  color: enabled
+                      ? context.colors.primary
+                      : context.colors.softMuted,
                 ),
                 const SizedBox(width: 10),
               ],
@@ -1130,7 +1136,9 @@ class _PickerField extends StatelessWidget {
                   value.isEmpty ? placeholder : value,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: value.isEmpty ? context.colors.softMuted : context.colors.text,
+                    color: value.isEmpty
+                        ? context.colors.softMuted
+                        : context.colors.text,
                     fontSize: 15,
                   ),
                 ),
@@ -1228,13 +1236,14 @@ Future<T?> _showChoiceSheet<T>({
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: options.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final option = options[index];
                     final selected = option.value == value;
                     return Material(
-                      color: selected ? context.colors.chip : Colors.transparent,
+                      color: selected
+                          ? context.colors.chip
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(10),
@@ -1257,9 +1266,7 @@ Future<T?> _showChoiceSheet<T>({
                           child: Row(
                             children: [
                               Icon(
-                                selected
-                                    ? Icons.check_circle
-                                    : option.icon,
+                                selected ? Icons.check_circle : option.icon,
                                 size: 20,
                                 color: context.colors.primary,
                               ),
@@ -1311,8 +1318,8 @@ class _DateField extends StatelessWidget {
     final display = value == null
         ? ''
         : '${value!.year.toString().padLeft(4, '0')}/'
-            '${value!.month.toString().padLeft(2, '0')}/'
-            '${value!.day.toString().padLeft(2, '0')}';
+              '${value!.month.toString().padLeft(2, '0')}/'
+              '${value!.day.toString().padLeft(2, '0')}';
     return _LabeledBlock(
       label: label,
       child: InkWell(
@@ -1346,10 +1353,18 @@ class _DateField extends StatelessWidget {
                   onTap: () => onChanged(null),
                   child: Padding(
                     padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.close, size: 18, color: context.colors.softMuted),
+                    child: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: context.colors.softMuted,
+                    ),
                   ),
                 ),
-              Icon(Icons.calendar_today_outlined, size: 18, color: context.colors.muted),
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 18,
+                color: context.colors.muted,
+              ),
             ],
           ),
         ),
@@ -1429,7 +1444,8 @@ class _JumpHostSelector extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         onTap: options.isEmpty ? null : () => _showPicker(context),
         child: InputDecorator(
-          decoration: _fieldDecoration(context,
+          decoration: _fieldDecoration(
+            context,
             helperText: options.isEmpty
                 ? l.tr('servers.jumpHosts.empty')
                 : null,
@@ -1437,7 +1453,10 @@ class _JumpHostSelector extends StatelessWidget {
           child: selectedHosts.isEmpty
               ? Text(
                   l.tr('servers.jumpHosts.placeholder'),
-                  style: TextStyle(color: context.colors.softMuted, fontSize: 14),
+                  style: TextStyle(
+                    color: context.colors.softMuted,
+                    fontSize: 14,
+                  ),
                 )
               : Column(
                   children: [
@@ -1471,7 +1490,11 @@ class _JumpHostSelector extends StatelessWidget {
                                   ..remove(selectedHosts[i].id);
                                 onChanged(next);
                               },
-                              child: Icon(Icons.close, size: 18, color: context.colors.softMuted),
+                              child: Icon(
+                                Icons.close,
+                                size: 18,
+                                color: context.colors.softMuted,
+                              ),
                             ),
                           ],
                         ),
@@ -1545,7 +1568,9 @@ class _JumpHostSelector extends StatelessWidget {
                                 backgroundColor: context.colors.primary,
                                 child: Text(
                                   '$order',
-                                  style: TextStyle(color: context.colors.fontOnPrimary),
+                                  style: TextStyle(
+                                    color: context.colors.fontOnPrimary,
+                                  ),
                                 ),
                               )
                             : null,

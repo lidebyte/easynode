@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_result.dart';
 import '../../core/ui/app_color_theme.dart';
 import '../../core/ui/refresh_feedback.dart';
+import '../../core/ui/top_notice.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/auth_notifier.dart';
 import '../../state/docker_providers.dart';
@@ -96,7 +97,7 @@ class _DockerPanelState extends ConsumerState<DockerPanel> {
       return;
     }
     if (!ref.read(isPlusActiveProvider)) {
-      _showSnack(l.tr('docker.plusRequired'));
+      showTopNotice(context, l.tr('plus.serverManagedTip'));
       return;
     }
     final authSession = ref.read(authProvider).session;
@@ -199,7 +200,7 @@ class _DockerPanelState extends ConsumerState<DockerPanel> {
                     _autoConnectInitialServer(servers);
                     if (!isPlusActive) {
                       return _DockerMessageList(
-                        message: l.tr('docker.plusRequired'),
+                        message: l.tr('plus.serverManagedTip'),
                         icon: Icons.workspace_premium_outlined,
                       );
                     }
@@ -425,7 +426,7 @@ class _DockerContainerListState extends State<_DockerContainerList> {
     final session = widget.session;
     if (session.status == DockerConnectionStatus.error) {
       final message = session.errorMessage == 'docker_not_plus'
-          ? l.tr('docker.notPlus')
+          ? l.tr('plus.serverManagedTip')
           : session.errorMessage == 'docker_connect_fail'
           ? l.tr('docker.connectFailed')
           : session.errorMessage ?? l.tr('docker.connectFailed');

@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/api/api_result.dart';
 import '../../core/ui/app_color_theme.dart';
 import '../../core/ui/refresh_feedback.dart';
+import '../../core/ui/top_notice.dart';
 import '../../features/servers/server_model.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/api_providers.dart';
@@ -44,6 +45,7 @@ class SftpPanel extends ConsumerStatefulWidget {
     this.allowDisconnect = true,
     this.lockToHost = false,
     this.onExecCommand,
+    this.onCommandPanelClose,
   });
 
   final bool showHeader;
@@ -51,6 +53,7 @@ class SftpPanel extends ConsumerStatefulWidget {
   final bool allowDisconnect;
   final bool lockToHost;
   final void Function(String command)? onExecCommand;
+  final VoidCallback? onCommandPanelClose;
 
   @override
   ConsumerState<SftpPanel> createState() => _SftpPanelState();
@@ -245,6 +248,7 @@ class _SftpPanelState extends ConsumerState<SftpPanel> {
                       session: session,
                       manager: manager,
                       onExecCommand: widget.onExecCommand,
+                      onCommandPanelClose: widget.onCommandPanelClose,
                       isPlusActive: ref.watch(isPlusActiveProvider),
                     );
                   },
@@ -288,12 +292,14 @@ class _SftpConnectedView extends StatelessWidget {
     required this.session,
     required this.manager,
     this.onExecCommand,
+    this.onCommandPanelClose,
     this.isPlusActive = false,
   });
 
   final SftpSessionState session;
   final SftpSessionManager manager;
   final void Function(String command)? onExecCommand;
+  final VoidCallback? onCommandPanelClose;
   final bool isPlusActive;
 
   @override
@@ -409,8 +415,10 @@ class _SftpConnectedView extends StatelessWidget {
   }
 
   static bool _isDockerComposeFile(String filename) {
-    return RegExp(r'^docker-compose\.(yml|yaml)$', caseSensitive: false)
-        .hasMatch(filename);
+    return RegExp(
+      r'^docker-compose\.(yml|yaml)$',
+      caseSensitive: false,
+    ).hasMatch(filename);
   }
 
   void _showFileActionSheet(
@@ -573,20 +581,41 @@ class _SftpConnectedView extends StatelessWidget {
       anchor.name,
     );
     final composeActions = <(IconData, String, String)>[
-      (Icons.play_arrow_rounded, l.tr('sftp.compose.up'),
-          'docker compose -f $fullPath up -d\n'),
-      (Icons.restart_alt_rounded, l.tr('sftp.compose.restart'),
-          'docker compose -f $fullPath restart\n'),
-      (Icons.stop_rounded, l.tr('sftp.compose.down'),
-          'docker compose -f $fullPath down\n'),
-      (Icons.cloud_download_outlined, l.tr('sftp.compose.pull'),
-          'docker compose -f $fullPath pull\n'),
-      (Icons.build_outlined, l.tr('sftp.compose.rebuild'),
-          'docker compose -f $fullPath up -d --force-recreate\n'),
-      (Icons.upgrade_rounded, l.tr('sftp.compose.upgrade'),
-          'docker compose -f $fullPath pull && docker compose -f $fullPath down && docker compose -f $fullPath up -d\n'),
-      (Icons.article_outlined, l.tr('sftp.compose.logs'),
-          'docker compose -f $fullPath logs --tail=500 -f\n'),
+      (
+        Icons.play_arrow_rounded,
+        l.tr('sftp.compose.up'),
+        'docker compose -f $fullPath up -d\n',
+      ),
+      (
+        Icons.restart_alt_rounded,
+        l.tr('sftp.compose.restart'),
+        'docker compose -f $fullPath restart\n',
+      ),
+      (
+        Icons.stop_rounded,
+        l.tr('sftp.compose.down'),
+        'docker compose -f $fullPath down\n',
+      ),
+      (
+        Icons.cloud_download_outlined,
+        l.tr('sftp.compose.pull'),
+        'docker compose -f $fullPath pull\n',
+      ),
+      (
+        Icons.build_outlined,
+        l.tr('sftp.compose.rebuild'),
+        'docker compose -f $fullPath up -d --force-recreate\n',
+      ),
+      (
+        Icons.upgrade_rounded,
+        l.tr('sftp.compose.upgrade'),
+        'docker compose -f $fullPath pull && docker compose -f $fullPath down && docker compose -f $fullPath up -d\n',
+      ),
+      (
+        Icons.article_outlined,
+        l.tr('sftp.compose.logs'),
+        'docker compose -f $fullPath logs --tail=500 -f\n',
+      ),
     ];
     showModalBottomSheet<void>(
       context: context,
@@ -639,15 +668,11 @@ class _SftpConnectedView extends StatelessWidget {
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     if (!isPlusActive) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l.tr('sftp.compose.plusRequired')),
-                        ),
-                      );
+                      showTopNotice(context, l.tr('plus.serverManagedTip'));
                       return;
                     }
                     onExecCommand!(command);
-                    Navigator.of(context).pop();
+                    onCommandPanelClose?.call();
                   },
                 ),
             ],
@@ -1391,8 +1416,7 @@ class _SftpNameDialogState extends State<_SftpNameDialog> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_controller.text),
+                  onPressed: () => Navigator.of(context).pop(_controller.text),
                   style: FilledButton.styleFrom(
                     backgroundColor: c.primary,
                     foregroundColor: c.fontOnPrimary,
@@ -1614,11 +1638,13 @@ class _SftpCreateDialogState extends State<_SftpCreateDialog> {
                       onTap: () => _selectSuggestion(item),
                       borderRadius: index == 0
                           ? const BorderRadius.vertical(
-                              top: Radius.circular(10))
+                              top: Radius.circular(10),
+                            )
                           : index == _filtered.length - 1
-                              ? const BorderRadius.vertical(
-                                  bottom: Radius.circular(10))
-                              : BorderRadius.zero,
+                          ? const BorderRadius.vertical(
+                              bottom: Radius.circular(10),
+                            )
+                          : BorderRadius.zero,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -1644,8 +1670,7 @@ class _SftpCreateDialogState extends State<_SftpCreateDialog> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_controller.text),
+                  onPressed: () => Navigator.of(context).pop(_controller.text),
                   style: FilledButton.styleFrom(
                     backgroundColor: c.primary,
                     foregroundColor: c.fontOnPrimary,

@@ -7,22 +7,10 @@ class ApiFailure implements Exception {
   final String message;
   final int? statusCode;
 
-  /// Raw `data` object from the server response body, if any. Used to surface
-  /// structured flags like `needRestart` from `/plus-conf`.
+  /// Raw `data` object from the server response body, if any.
   final Object? data;
 
   bool get isUnauthorized => statusCode == 401 || statusCode == 403;
-
-  /// `true` when the server signalled the client must restart the panel
-  /// service before re-activating Plus (kicked session).
-  bool get needRestart {
-    final d = data;
-    if (d is Map) {
-      final v = d['needRestart'];
-      return v == true || v == 1 || v == '1' || v == 'true';
-    }
-    return false;
-  }
 
   @override
   String toString() => message;

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_result.dart';
 import '../../core/ui/app_color_theme.dart';
 import '../../core/ui/refresh_feedback.dart';
+import '../../core/ui/top_notice.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/api_providers.dart';
 import '../../state/plus_info_notifier.dart';
@@ -124,7 +125,7 @@ class _ProxyPageState extends ConsumerState<ProxyPage> {
 
   void _showPlusGate() {
     final l = AppLocalizations.of(context);
-    _showSnack(l.tr('proxy.plusTipBody'));
+    showTopNotice(context, l.tr('plus.serverManagedTip'));
   }
 
   void _showSnack(String text) {
@@ -136,12 +137,14 @@ class _ProxyPageState extends ConsumerState<ProxyPage> {
   List<ServerProxyModel> _filter(List<ServerProxyModel> list) {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return list;
-    return list.where((e) {
-      return e.name.toLowerCase().contains(q) ||
-          e.host.toLowerCase().contains(q) ||
-          e.username.toLowerCase().contains(q) ||
-          e.type.toLowerCase().contains(q);
-    }).toList(growable: false);
+    return list
+        .where((e) {
+          return e.name.toLowerCase().contains(q) ||
+              e.host.toLowerCase().contains(q) ||
+              e.username.toLowerCase().contains(q) ||
+              e.type.toLowerCase().contains(q);
+        })
+        .toList(growable: false);
   }
 
   String _formatDate(int? ms) {
@@ -155,7 +158,8 @@ class _ProxyPageState extends ConsumerState<ProxyPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final async = ref.watch(proxyListProvider);
-    final plusActive = ref.watch(plusInfoProvider).valueOrNull?.isActive ?? false;
+    final plusActive =
+        ref.watch(plusInfoProvider).valueOrNull?.isActive ?? false;
 
     return Scaffold(
       backgroundColor: context.colors.canvas,
@@ -221,18 +225,21 @@ class _ProxyPageState extends ConsumerState<ProxyPage> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  BorderSide(color: context.colors.border),
+                              borderSide: BorderSide(
+                                color: context.colors.border,
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  BorderSide(color: context.colors.border),
+                              borderSide: BorderSide(
+                                color: context.colors.border,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  BorderSide(color: context.colors.accent),
+                              borderSide: BorderSide(
+                                color: context.colors.accent,
+                              ),
                             ),
                           ),
                         ),
@@ -349,7 +356,7 @@ class _PlusTip extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  l.tr('proxy.plusTipBody'),
+                  l.tr('plus.serverManagedTip'),
                   style: TextStyle(
                     fontSize: 11,
                     color: context.colors.muted,
@@ -652,10 +659,7 @@ class _ActionButton extends StatelessWidget {
                 ? SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: fg,
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: fg),
                   )
                 : Icon(icon, size: 14, color: fg),
           ),

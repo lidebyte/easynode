@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_result.dart';
+import '../../core/ui/top_notice.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/api_providers.dart';
 import '../../state/auth_notifier.dart';
@@ -33,9 +34,7 @@ class _ScriptGroupsPageState extends ConsumerState<ScriptGroupsPage> {
   bool _ensurePlusOrWarn() {
     if (ref.read(isPlusActiveProvider)) return true;
     final l = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l.tr('scripts.groupsPlusTip'))),
-    );
+    showTopNotice(context, l.tr('plus.serverManagedTip'));
     return false;
   }
 
@@ -152,10 +151,7 @@ class _ScriptGroupsPageState extends ConsumerState<ScriptGroupsPage> {
         elevation: 0,
         title: Text(
           l.tr('scripts.groupsTitle'),
-          style: TextStyle(
-            color: c.text,
-            fontWeight: FontWeight.w800,
-          ),
+          style: TextStyle(color: c.text, fontWeight: FontWeight.w800),
         ),
         iconTheme: IconThemeData(color: c.text),
         actions: [
@@ -190,7 +186,7 @@ class _ScriptGroupsPageState extends ConsumerState<ScriptGroupsPage> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
             children: [
               if (!isPlus) ...[
-                _PlusBanner(message: l.tr('scripts.groupsPlusTip')),
+                _PlusBanner(message: l.tr('plus.serverManagedTip')),
                 const SizedBox(height: 10),
               ],
               _HintCard(body: l.tr('scripts.groupsHintBody')),
@@ -237,21 +233,13 @@ class _HintCard extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Icon(
-              Icons.info_outline,
-              size: 16,
-              color: c.primary,
-            ),
+            child: Icon(Icons.info_outline, size: 16, color: c.primary),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               body,
-              style: TextStyle(
-                color: c.muted,
-                fontSize: 12,
-                height: 1.4,
-              ),
+              style: TextStyle(color: c.muted, fontSize: 12, height: 1.4),
             ),
           ),
         ],
@@ -368,10 +356,7 @@ class _GroupCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       l.trf('scripts.scriptCount', [scriptCount]),
-                      style: TextStyle(
-                        color: c.softMuted,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: c.softMuted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -399,9 +384,7 @@ class _GroupCard extends StatelessWidget {
                 ),
                 _ActionIcon(
                   icon: Icons.delete_outline,
-                  color: onDelete == null
-                      ? c.softMuted
-                      : c.danger,
+                  color: onDelete == null ? c.softMuted : c.danger,
                   onTap: onDelete,
                 ),
               ],
