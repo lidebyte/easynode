@@ -15,6 +15,25 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+val releaseSigningProperties = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val hasReleaseSigningConfig = releaseSigningProperties.all { key ->
+    !keystoreProperties.getProperty(key).isNullOrBlank()
+}
+
+gradle.taskGraph.whenReady {
+    val requiresReleaseSigning = allTasks.any { task ->
+        task.path.startsWith(":app:") && task.name.contains("Release")
+    }
+
+    if (requiresReleaseSigning && !hasReleaseSigningConfig) {
+        throw GradleException(
+            "Release builds require native/android/key.properties with " +
+                releaseSigningProperties.joinToString(", ") +
+                ". Copy key.properties.example and point storeFile to the original release keystore."
+        )
+    }
+}
+
 android {
     namespace = "io.github.chaoszhu.easynode"
     compileSdk = flutter.compileSdkVersion
@@ -51,15 +70,7 @@ android {
 
     buildTypes {
         release {
-            // Fall back to the debug keystore if key.properties is missing so
-            // `flutter run --release` keeps working locally for contributors
-            // who haven't set up signing yet. Real release builds REQUIRE the
-            // key.properties file to be present.
-            signingConfig = if (keystoreProperties.isEmpty) {
-                signingConfigs.getByName("debug")
-            } else {
-                signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
