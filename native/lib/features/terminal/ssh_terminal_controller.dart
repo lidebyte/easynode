@@ -50,8 +50,15 @@ class SshTerminalController {
     try {
       final transport = await _transportFactory.open(
         config,
-        logger: (message) => terminal.write('[Info] $message\r\n'),
+        logger: (message) {
+          if (_disposed) return;
+          terminal.write('[Info] $message\r\n');
+        },
       );
+      if (_disposed) {
+        await transport.close();
+        return;
+      }
       _transport = transport;
       terminal.write('[Info] 准备连接目标终端: ${config.name} - ${config.host}\r\n');
       // dartssh2 `SSHKeyPair.fromPem` already returns `List<SSHKeyPair>`, no
@@ -68,18 +75,24 @@ class SshTerminalController {
         identities: identities,
       );
     } on SshTransportException catch (error) {
+      if (_disposed) return;
       terminal.write('[Error] ${error.message}\r\n');
       rethrow;
     } catch (error) {
+      if (_disposed) return;
       terminal.write('[Error] $error\r\n');
       rethrow;
     }
+    if (_disposed) return;
     final session = await _client!.shell();
+    if (_disposed) return;
     _session = session;
     _stdoutSub = session.stdout.listen((data) {
+      if (_disposed) return;
       _writeTerminalOutput(utf8.decode(data, allowMalformed: true));
     });
     _stderrSub = session.stderr.listen((data) {
+      if (_disposed) return;
       _writeTerminalOutput(utf8.decode(data, allowMalformed: true));
     });
     terminal.onOutput = (data) {
@@ -140,6 +153,8 @@ class SshTerminalController {
 
   Future<void> disconnect() async {
     _disposed = true;
+    terminal.onOutput = null;
+    terminal.onResize = null;
     await _stdoutSub?.cancel();
     await _stderrSub?.cancel();
     _stdoutSub = null;

@@ -74,12 +74,18 @@ class TerminalSessionManager extends ChangeNotifier {
     final session = _findOrNull(id);
     if (session == null) return;
     final terminal = session.controller.terminal;
-    await session.controller.disconnect();
+    // Force-disconnect regardless of current state (connecting/connected/error).
+    final oldController = session.controller;
     session.controller = SshTerminalController(
       config: session.config,
       terminal: terminal,
     );
-    session.controller.terminal.write('\r\n[Reconnecting]\r\n');
+    session.status = TerminalSessionStatus.connecting;
+    notifyListeners();
+    // Tear down the old controller in the background — it no longer owns the
+    // terminal so its disconnect cannot interfere with the new connection.
+    unawaited(oldController.disconnect());
+    terminal.write('\r\n[Reconnecting]\r\n');
     await _connect(session);
   }
 
@@ -112,12 +118,18 @@ class TerminalSessionManager extends ChangeNotifier {
   }
 
   Future<void> _connect(TerminalSession session) async {
+    final controller = session.controller;
     session.status = TerminalSessionStatus.connecting;
     session.lastError = null;
     notifyListeners();
     try {
-      await session.controller.connect();
-      if (!_sessions.contains(session)) return;
+      await controller.connect();
+      // After await, verify this controller is still the active one — a
+      // concurrent reconnect may have replaced it.
+      if (!_sessions.contains(session) ||
+          session.controller != controller) {
+        return;
+      }
       session.status = TerminalSessionStatus.connected;
       notifyListeners();
       if (_shouldAutoStartStatusMonitor()) {
@@ -129,7 +141,10 @@ class TerminalSessionManager extends ChangeNotifier {
         );
       }
     } catch (error) {
-      if (!_sessions.contains(session)) return;
+      if (!_sessions.contains(session) ||
+          session.controller != controller) {
+        return;
+      }
       session.status = TerminalSessionStatus.error;
       session.lastError = error.toString();
       session.controller.terminal.write('\r\n[Error] ${session.lastError}\r\n');
