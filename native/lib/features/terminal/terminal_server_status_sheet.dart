@@ -100,14 +100,14 @@ class _ServerStatusContent extends StatelessWidget {
           _ProgressSection(
             label: l.tr('terminal.statusPanel.memory'),
             percentage: snapshot.memInfo.usedMemPercentage,
-            detail: '${_gb(snapshot.memInfo.usedMemMb)}/${_gb(snapshot.memInfo.totalMemMb)}G',
+            detail: _formatMemPair(snapshot.memInfo.usedMemMb, snapshot.memInfo.totalMemMb),
           ),
           const SizedBox(height: 6),
           // Swap with progress bar
           _ProgressSection(
             label: l.tr('terminal.statusPanel.swap'),
             percentage: snapshot.swapInfo.swapPercentage,
-            detail: '${_gb(snapshot.swapInfo.swapUsed)}/${_gb(snapshot.swapInfo.swapTotal)}G',
+            detail: _formatMemPair(snapshot.swapInfo.swapUsed, snapshot.swapInfo.swapTotal),
           ),
           const SizedBox(height: 12),
           // Drives - each with progress bar
@@ -692,6 +692,14 @@ String _speedFull(double mb) {
 }
 
 String _gb(int mb) => (mb / 1024).toStringAsFixed(1);
+
+// 内存/交换空间用量展示：低于1G时用MB整数展示（更直观，避免出现 0.2G 这种不精确的显示），否则用G保留1位小数
+String _formatMemPair(int usedMb, int totalMb) {
+  if (totalMb > 0 && totalMb < 1024) {
+    return '$usedMb/${totalMb}MB';
+  }
+  return '${_gb(usedMb)}/${_gb(totalMb)}G';
+}
 
 String _formatDuration(double seconds) {
   final totalMinutes = (seconds / 60).floor();
