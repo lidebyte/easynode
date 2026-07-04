@@ -440,6 +440,61 @@ module.exports = (httpServer) => {
       }
     }
 
+    // 获取 cgroup 内存/交换分区限制信息（容器化环境下 free -m 反映的是宿主机数据，而非容器配额）
+    // 一次命令拿全 5 行：version, memTotal, memUsed, swapTotal, swapUsed，减少 SSH 往返
+    // 返回 null 表示未容器化 / 权限不足 / 无法确定限制，调用方应继续使用 free -m 的结果兜底
+    const getCgroupMemoryInfo = async () => {
+      try {
+        const cmd = 'if [ -f /sys/fs/cgroup/memory.max ]; then echo v2; ' +
+          '\\cat /sys/fs/cgroup/memory.max; \\cat /sys/fs/cgroup/memory.current; ' +
+          '\\cat /sys/fs/cgroup/memory.swap.max 2>/dev/null || echo na; ' +
+          '\\cat /sys/fs/cgroup/memory.swap.current 2>/dev/null || echo na; ' +
+          'elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then echo v1; ' +
+          '\\cat /sys/fs/cgroup/memory/memory.limit_in_bytes; \\cat /sys/fs/cgroup/memory/memory.usage_in_bytes; ' +
+          'echo na; echo na; else echo none; fi'
+
+        const output = await executeCommand(cmd)
+        const lines = output.split('\n').map(l => l.trim()).filter(l => l !== '')
+        const version = lines[0]
+
+        // 未使用 cgroup 内存限制，或环境不支持（如 gVisor/权限受限容器/命名空间未隔离）
+        if (version !== 'v1' && version !== 'v2') return null
+
+        const [, memTotalRaw, memUsedRaw, swapTotalRaw, swapUsedRaw] = lines
+
+        // 处理内存限制：v2 用 "max" 表示无限制；v1 无限制时是接近 2^63 的哨兵值，用 1PB 阈值过滤掉
+        let memTotalBytes = null
+        let memUsedBytes = null
+        if (memTotalRaw && memTotalRaw !== 'max') {
+          const t = parseInt(memTotalRaw, 10)
+          const u = parseInt(memUsedRaw, 10)
+          const isSentinel = version === 'v1' && t >= 1e15
+          if (!isNaN(t) && !isNaN(u) && t > 0 && !isSentinel) {
+            memTotalBytes = t
+            memUsedBytes = u
+          }
+        }
+
+        // 处理交换分区限制：只支持 cgroup v2 的 memory.swap.max/current（swap 专属限制）
+        // v1 只有 memsw（内存+交换合并计数），需要减法推导且依赖内核 swapaccount 参数，
+        // 可靠性不足，这里不做处理，交由 free -m 的宿主机数据兜底
+        let swapTotalBytes = null
+        let swapUsedBytes = null
+        if (swapTotalRaw && swapTotalRaw !== 'max' && swapTotalRaw !== 'na') {
+          const t = parseInt(swapTotalRaw, 10)
+          const u = parseInt(swapUsedRaw, 10)
+          if (!isNaN(t) && !isNaN(u) && t > 0) {
+            swapTotalBytes = t
+            swapUsedBytes = u
+          }
+        }
+
+        return { memTotalBytes, memUsedBytes, swapTotalBytes, swapUsedBytes }
+      } catch (error) {
+        return null
+      }
+    }
+
     // 获取内存和交换空间信息（统一处理，支持BusyBox）
     const getMemoryInfo = async () => {
       const defaultReturn = {
@@ -531,6 +586,43 @@ module.exports = (httpServer) => {
         } else {
           // 没有交换空间
           swapInfo = { swapTotal: 0, swapUsed: 0, swapFree: 0, swapPercentage: '0' }
+        }
+
+        // 容器化环境下，free -m 反映的是宿主机数据而非容器配额；
+        // 若 cgroup 限制存在且明显比宿主机数据更小（说明确实被限制了），则以 cgroup 数据为准
+        try {
+          const cgroupMem = await getCgroupMemoryInfo()
+          if (cgroupMem) {
+            if (cgroupMem.memTotalBytes != null) {
+              const cgroupTotalMb = Math.round(cgroupMem.memTotalBytes / 1024 / 1024)
+              if (cgroupTotalMb > 0 && cgroupTotalMb < memInfo.totalMemMb) {
+                const cgroupUsedMb = Math.max(0, Math.min(Math.round(cgroupMem.memUsedBytes / 1024 / 1024), cgroupTotalMb))
+                const cgroupFreeMb = cgroupTotalMb - cgroupUsedMb
+                memInfo = {
+                  totalMemMb: cgroupTotalMb,
+                  usedMemMb: cgroupUsedMb,
+                  freeMemMb: cgroupFreeMb,
+                  usedMemPercentage: parseFloat(((cgroupUsedMb / cgroupTotalMb) * 100).toFixed(2)),
+                  freeMemPercentage: parseFloat(((cgroupFreeMb / cgroupTotalMb) * 100).toFixed(2))
+                }
+              }
+            }
+            if (cgroupMem.swapTotalBytes != null) {
+              const cgroupSwapTotalMb = Math.round(cgroupMem.swapTotalBytes / 1024 / 1024)
+              if (cgroupSwapTotalMb > 0 && (swapInfo.swapTotal === 0 || cgroupSwapTotalMb < swapInfo.swapTotal)) {
+                const cgroupSwapUsedMb = Math.max(0, Math.min(Math.round(cgroupMem.swapUsedBytes / 1024 / 1024), cgroupSwapTotalMb))
+                swapInfo = {
+                  swapTotal: cgroupSwapTotalMb,
+                  swapUsed: cgroupSwapUsedMb,
+                  swapFree: cgroupSwapTotalMb - cgroupSwapUsedMb,
+                  swapPercentage: ((cgroupSwapUsedMb / cgroupSwapTotalMb) * 100).toFixed(1)
+                }
+              }
+            }
+          }
+        } catch (cgroupError) {
+          // cgroup 检测失败不影响已获取的宿主机内存/交换数据
+          logger.warn('获取 cgroup 内存限制失败，使用宿主机数据兜底:', cgroupError.message)
         }
 
         return { memInfo, swapInfo }
