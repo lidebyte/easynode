@@ -85,7 +85,7 @@
           :color="handleUsedColor(usedMemPercentage)"
         />
         <div class="position_right">
-          {{ $tools.toFixed(memInfo.usedMemMb / 1024) }}/{{ $tools.toFixed(memInfo.totalMemMb / 1024) }}G
+          {{ $tools.formatMemPair(memInfo.usedMemMb, memInfo.totalMemMb) }}
         </div>
       </el-descriptions-item>
       <el-descriptions-item>
@@ -101,7 +101,7 @@
           :color="handleUsedColor(swapPercentage)"
         />
         <div class="position_right">
-          {{ $tools.toFixed(swapInfo.swapUsed / 1024) }}/{{ $tools.toFixed(swapInfo.swapTotal / 1024) }}G
+          {{ $tools.formatMemPair(swapInfo.swapUsed, swapInfo.swapTotal) }}
         </div>
       </el-descriptions-item>
       <el-descriptions-item v-for="(d,idx) in drivesInfo" :key="d.filesystem + idx">

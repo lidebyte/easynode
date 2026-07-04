@@ -23,6 +23,17 @@ export default {
     if (netSpeedMB >= 1) return `${ netSpeedMB.toFixed(2) } MB/s`
     return `${ (netSpeedMB * 1024).toFixed(1) } KB/s`
   },
+  // 内存/交换空间用量展示：低于1G时用MB整数展示（更直观，避免出现 0.2G 这种不精确的显示），否则用G保留1位小数
+  formatMemPair(usedMb, totalMb) {
+    usedMb = Number(usedMb) || 0
+    totalMb = Number(totalMb) || 0
+    if (totalMb > 0 && totalMb < 1024) {
+      return `${ Math.round(usedMb) }/${ Math.round(totalMb) }MB`
+    }
+    const usedG = (usedMb / 1024).toFixed(1)
+    const totalG = (totalMb / 1024).toFixed(1)
+    return `${ usedG }/${ totalG }G`
+  },
   // format: time OR date
   formatTimestamp: (timestamp, format = 'time', afterSeparator = ':') => {
     if (typeof(timestamp) !== 'number') return '--'

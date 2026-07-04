@@ -226,6 +226,113 @@ class ServerStatusParser {
     );
   }
 
+  // 解析 cgroup 内存/交换分区限制信息（一次命令拿全 5 行：
+  // version, memTotal, memUsed, swapTotal, swapUsed）。
+  // 容器化环境下 free -m 反映的是宿主机数据而非容器配额，需要 cgroup 数据来修正。
+  // 返回 null 表示未容器化 / 权限不足 / 无法确定限制，调用方应继续用 free -m 的结果兜底。
+  static CgroupMemoryInfo? parseCgroupMemory(String output) {
+    final lines = output
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (lines.isEmpty) return null;
+    final version = lines[0];
+    if (version != 'v1' && version != 'v2') return null;
+    if (lines.length < 5) return null;
+
+    final memTotalRaw = lines[1];
+    final memUsedRaw = lines[2];
+    final swapTotalRaw = lines[3];
+    final swapUsedRaw = lines[4];
+
+    // 处理内存限制：v2 用 "max" 表示无限制；
+    // v1 无限制时是接近 2^63 的哨兵值，用 1PB 阈值过滤掉
+    int? memTotalBytes;
+    int? memUsedBytes;
+    if (memTotalRaw != 'max') {
+      final t = int.tryParse(memTotalRaw);
+      final u = int.tryParse(memUsedRaw);
+      final isSentinel = version == 'v1' && t != null && t >= 1000000000000000;
+      if (t != null && u != null && t > 0 && !isSentinel) {
+        memTotalBytes = t;
+        memUsedBytes = u;
+      }
+    }
+
+    // 处理交换分区限制：只支持 cgroup v2 的 memory.swap.max/current（swap 专属限制）
+    // v1 只有 memsw（内存+交换合并计数），需要减法推导且依赖内核 swapaccount 参数，
+    // 可靠性不足，这里不做处理，交由 free -m 的宿主机数据兜底
+    int? swapTotalBytes;
+    int? swapUsedBytes;
+    if (swapTotalRaw != 'max' && swapTotalRaw != 'na') {
+      final t = int.tryParse(swapTotalRaw);
+      final u = int.tryParse(swapUsedRaw);
+      if (t != null && u != null && t > 0) {
+        swapTotalBytes = t;
+        swapUsedBytes = u;
+      }
+    }
+
+    return CgroupMemoryInfo(
+      memTotalBytes: memTotalBytes,
+      memUsedBytes: memUsedBytes,
+      swapTotalBytes: swapTotalBytes,
+      swapUsedBytes: swapUsedBytes,
+    );
+  }
+
+  // 若 cgroup 限制存在且明显比宿主机数据更小（说明确实被限制了），则以 cgroup 数据覆盖
+  static MemorySwapInfo applyCgroupOverride(
+    MemorySwapInfo hostInfo,
+    CgroupMemoryInfo? cgroupInfo,
+  ) {
+    if (cgroupInfo == null) return hostInfo;
+
+    var memInfo = hostInfo.memInfo;
+    final memTotalBytes = cgroupInfo.memTotalBytes;
+    final memUsedBytes = cgroupInfo.memUsedBytes;
+    if (memTotalBytes != null && memUsedBytes != null) {
+      final cgroupTotalMb = (memTotalBytes / 1024 / 1024).round();
+      if (cgroupTotalMb > 0 && cgroupTotalMb < memInfo.totalMemMb) {
+        final cgroupUsedMb = max(
+          0,
+          min((memUsedBytes / 1024 / 1024).round(), cgroupTotalMb),
+        );
+        final cgroupFreeMb = cgroupTotalMb - cgroupUsedMb;
+        memInfo = MemoryInfo(
+          totalMemMb: cgroupTotalMb,
+          usedMemMb: cgroupUsedMb,
+          freeMemMb: cgroupFreeMb,
+          usedMemPercentage: _round2(cgroupUsedMb / cgroupTotalMb * 100),
+          freeMemPercentage: _round2(cgroupFreeMb / cgroupTotalMb * 100),
+        );
+      }
+    }
+
+    var swapInfo = hostInfo.swapInfo;
+    final swapTotalBytes = cgroupInfo.swapTotalBytes;
+    final swapUsedBytes = cgroupInfo.swapUsedBytes;
+    if (swapTotalBytes != null && swapUsedBytes != null) {
+      final cgroupSwapTotalMb = (swapTotalBytes / 1024 / 1024).round();
+      if (cgroupSwapTotalMb > 0 &&
+          (swapInfo.swapTotal == 0 || cgroupSwapTotalMb < swapInfo.swapTotal)) {
+        final cgroupSwapUsedMb = max(
+          0,
+          min((swapUsedBytes / 1024 / 1024).round(), cgroupSwapTotalMb),
+        );
+        swapInfo = SwapInfo(
+          swapTotal: cgroupSwapTotalMb,
+          swapUsed: cgroupSwapUsedMb,
+          swapFree: cgroupSwapTotalMb - cgroupSwapUsedMb,
+          swapPercentage: _round2(cgroupSwapUsedMb / cgroupSwapTotalMb * 100),
+        );
+      }
+    }
+
+    return MemorySwapInfo(memInfo: memInfo, swapInfo: swapInfo);
+  }
+
   static List<DriveInfo> parseDrives(String output) {
     final drives = <DriveInfo>[];
     final lines = output.split('\n').skip(1);
@@ -382,4 +489,18 @@ class MemorySwapInfo {
 
   final MemoryInfo memInfo;
   final SwapInfo swapInfo;
+}
+
+class CgroupMemoryInfo {
+  const CgroupMemoryInfo({
+    this.memTotalBytes,
+    this.memUsedBytes,
+    this.swapTotalBytes,
+    this.swapUsedBytes,
+  });
+
+  final int? memTotalBytes;
+  final int? memUsedBytes;
+  final int? swapTotalBytes;
+  final int? swapUsedBytes;
 }

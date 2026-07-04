@@ -246,10 +246,32 @@ class ServerStatusMonitorManager extends ChangeNotifier {
 
       if (client.isClosed) return;
 
-      // Group 2: Memory
+      // Group 2: Memory (+ cgroup 内存/交换分区限制，容器化环境下 free -m 反映的是宿主机数据)
       try {
-        final output = await _run(client, 'free -m');
-        final memory = ServerStatusParser.parseMemory(output);
+        const memSep = '---EASYNODE_MEMSEP---';
+        final output = await _run(
+          client,
+          'free -m\necho $memSep'
+          '\nif [ -f /sys/fs/cgroup/memory.max ]; then echo v2; '
+          'cat /sys/fs/cgroup/memory.max; cat /sys/fs/cgroup/memory.current; '
+          'cat /sys/fs/cgroup/memory.swap.max 2>/dev/null || echo na; '
+          'cat /sys/fs/cgroup/memory.swap.current 2>/dev/null || echo na; '
+          'elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then echo v1; '
+          'cat /sys/fs/cgroup/memory/memory.limit_in_bytes; '
+          'cat /sys/fs/cgroup/memory/memory.usage_in_bytes; echo na; echo na; '
+          'else echo none; fi',
+        );
+        final parts = output.split(memSep);
+        final hostMemory = ServerStatusParser.parseMemory(
+          parts.isNotEmpty ? parts[0] : '',
+        );
+        final cgroupMemory = parts.length > 1
+            ? ServerStatusParser.parseCgroupMemory(parts[1])
+            : null;
+        final memory = ServerStatusParser.applyCgroupOverride(
+          hostMemory,
+          cgroupMemory,
+        );
         runtime.currentMemInfo = memory.memInfo;
         runtime.currentSwapInfo = memory.swapInfo;
         _emitSnapshot(runtime);
