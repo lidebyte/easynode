@@ -22,9 +22,7 @@ dependencies:
       ref: "br_v9.2.4_ohos"
       path: "flutter_secure_storage_ohos"
   file_picker_ohos:
-    git:
-      url: "https://gitcode.com/CPF-Flutter/fluttertpc_file_picker.git"
-      ref: "br_v10.3.8_ohos"
+    path: packages/file_picker_ohos
   shared_preferences: ^2.3.2
   pointycastle: ^3.9.1
   basic_utils: ^5.7.0

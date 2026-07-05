@@ -28,7 +28,7 @@ Flutter 标准插件不识别 OHOS 平台，需要通过 `dependency_overrides` 
 
 | 插件 | 来源 | 分支/版本 | 说明 |
 |------|------|-----------|------|
-| `file_picker_ohos` | `CPF-Flutter/fluttertpc_file_picker` | `br_v10.3.8_ohos` | 文件选择器，全平台替代包 |
+| `file_picker_ohos` | `packages/file_picker_ohos` | vendored `br_v10.3.8_ohos` native OHOS files | 文件选择器，仅注册 OHOS 原生实现 |
 
 ## ohos_patch.sh 运行时补丁
 
@@ -47,6 +47,10 @@ Flutter 标准插件不识别 OHOS 平台，需要通过 `dependency_overrides` 
 - `~/.pub-cache/hosted/pub.dev/`
 - `~/PUB/hosted/pub.flutter-io.cn/`（PUB_CACHE 环境变量指定）
 - `~/PUB/git/`（git 依赖缓存）
+
+`file_picker_ohos` 已改为仓库内本地包，只声明 OHOS 平台，避免 Android
+release 构建时和官方 `file_picker` 同时产出 `com.mr.flutter.plugin.filepicker.*`
+类导致 R8 duplicate class。
 
 ## 构建步骤
 
