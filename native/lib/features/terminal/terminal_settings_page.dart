@@ -256,9 +256,9 @@ class _FontSizeSlider extends StatelessWidget {
               ),
               child: Slider(
                 value: value,
-                min: 10,
-                max: 24,
-                divisions: 14,
+                min: 6,
+                max: 18,
+                divisions: 12,
                 onChanged: (v) => onChanged(v),
               ),
             ),

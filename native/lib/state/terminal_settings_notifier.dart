@@ -52,7 +52,7 @@ class TerminalSettingsNotifier extends StateNotifier<TerminalSettings> {
   final AppStorage _storage;
 
   Future<void> setFontSize(double v) async {
-    final clamped = v.clamp(10.0, 24.0);
+    final clamped = v.clamp(6.0, 18.0);
     await _storage.setTerminalFontSize(clamped);
     state = state.copyWith(fontSize: clamped);
   }

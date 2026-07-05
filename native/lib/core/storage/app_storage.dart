@@ -75,7 +75,8 @@ class AppStorage {
   static const _keyTermTheme = 'terminal.themePreset';
   static const _keyTermAutoServerStatus = 'terminal.autoServerStatus';
 
-  double get terminalFontSize => _prefs.getDouble(_keyTermFontSize) ?? 12.0;
+  double get terminalFontSize =>
+      (_prefs.getDouble(_keyTermFontSize) ?? 12.0).clamp(6.0, 18.0);
   Future<void> setTerminalFontSize(double v) =>
       _prefs.setDouble(_keyTermFontSize, v);
 
