@@ -157,6 +157,7 @@ class _AppRoot extends ConsumerStatefulWidget {
 
 class _AppRootState extends ConsumerState<_AppRoot> {
   late final LoginController _loginController;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   final GlobalKey<ScaffoldMessengerState> _messengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
@@ -210,6 +211,15 @@ class _AppRootState extends ConsumerState<_AppRoot> {
     final auth = ref.watch(authProvider);
     final appStorage = ref.watch(appStorageProvider);
 
+    ref.listen<bool>(authProvider.select((state) => state.signedIn), (
+      previous,
+      next,
+    ) {
+      if (previous == true && !next) {
+        _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      }
+    });
+
     // Show a SnackBar whenever the 401/403 interceptor stashes a reason, then
     // clear it so the same message isn't shown twice on rebuilds.
     ref.listen<String?>(signOutReasonProvider, (_, next) {
@@ -249,6 +259,7 @@ class _AppRootState extends ConsumerState<_AppRoot> {
 
     return MaterialApp(
       title: 'EasyNode',
+      navigatorKey: _navigatorKey,
       scaffoldMessengerKey: _messengerKey,
       themeMode: ref.watch(themeModeProvider),
       theme: ThemeData(
@@ -321,23 +332,18 @@ class _BrandedSplashGateState extends State<_BrandedSplashGate>
       vsync: this,
       duration: const Duration(milliseconds: 850),
     );
-    _logoScale = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.elasticOut,
-    );
+    _logoScale = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
     _logoFade = CurvedAnimation(
       parent: _controller,
       curve: const Interval(0, 0.45, curve: Curves.easeOut),
     );
-    _textOffset = Tween<Offset>(
-      begin: const Offset(0, 0.35),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.18, 0.7, curve: Curves.easeOutBack),
-      ),
-    );
+    _textOffset = Tween<Offset>(begin: const Offset(0, 0.35), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.18, 0.7, curve: Curves.easeOutBack),
+          ),
+        );
     unawaited(_controller.forward());
     _timer = Timer(const Duration(milliseconds: 1250), () {
       if (mounted) setState(() => _showSplash = false);

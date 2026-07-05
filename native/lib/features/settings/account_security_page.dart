@@ -54,8 +54,9 @@ class _AccountSecurityPageState extends ConsumerState<AccountSecurityPage> {
 
   Future<void> _loadMfa() async {
     try {
-      final enabled =
-          await ref.read(settingsRepositoryProvider).getMfa2Status();
+      final enabled = await ref
+          .read(settingsRepositoryProvider)
+          .getMfa2Status();
       if (!mounted) return;
       setState(() {
         _mfaEnabled = enabled;
@@ -101,7 +102,9 @@ class _AccountSecurityPageState extends ConsumerState<AccountSecurityPage> {
 
     setState(() => _saving = true);
     try {
-      await ref.read(settingsRepositoryProvider).updateAccount(
+      await ref
+          .read(settingsRepositoryProvider)
+          .updateAccount(
             oldLoginName: oldName,
             oldPwd: oldPwd,
             newLoginName: newName,
@@ -109,6 +112,8 @@ class _AccountSecurityPageState extends ConsumerState<AccountSecurityPage> {
           );
       if (!mounted) return;
       _showSnack(l.tr('account.changed'));
+      await ref.read(authProvider.notifier).signOut();
+    } on UnauthorizedFailure {
       await ref.read(authProvider.notifier).signOut();
     } on ApiFailure catch (err) {
       if (!mounted) return;
@@ -124,8 +129,7 @@ class _AccountSecurityPageState extends ConsumerState<AccountSecurityPage> {
   Future<void> _startEnableMfa() async {
     setState(() => _enableLoading = true);
     try {
-      final setup =
-          await ref.read(settingsRepositoryProvider).getMfa2QrInfo();
+      final setup = await ref.read(settingsRepositoryProvider).getMfa2QrInfo();
       if (!mounted) return;
       setState(() => _setup = setup);
     } on ApiFailure catch (err) {
@@ -221,8 +225,7 @@ class _AccountSecurityPageState extends ConsumerState<AccountSecurityPage> {
               child: Text(l.tr('common.cancel')),
             ),
             FilledButton(
-              onPressed: () =>
-                  Navigator.of(ctx).pop(controller.text.trim()),
+              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
               child: Text(confirmText),
             ),
           ],
@@ -274,12 +277,10 @@ class _AccountSecurityPageState extends ConsumerState<AccountSecurityPage> {
             showNewPwd: _showNewPwd,
             showNewPwdConfirm: _showNewPwdConfirm,
             saving: _saving,
-            onToggleOldPwd: () =>
-                setState(() => _showOldPwd = !_showOldPwd),
-            onToggleNewPwd: () =>
-                setState(() => _showNewPwd = !_showNewPwd),
-            onToggleNewPwdConfirm: () => setState(
-                () => _showNewPwdConfirm = !_showNewPwdConfirm),
+            onToggleOldPwd: () => setState(() => _showOldPwd = !_showOldPwd),
+            onToggleNewPwd: () => setState(() => _showNewPwd = !_showNewPwd),
+            onToggleNewPwdConfirm: () =>
+                setState(() => _showNewPwdConfirm = !_showNewPwdConfirm),
             onSubmit: _saveAccount,
           ),
           const SizedBox(height: 22),
@@ -390,10 +391,7 @@ class _CredentialsCard extends StatelessWidget {
                 controller: oldPwdCtrl,
                 hintText: l.tr('account.oldPwd'),
                 obscure: !showOldPwd,
-                suffix: _EyeButton(
-                  visible: showOldPwd,
-                  onTap: onToggleOldPwd,
-                ),
+                suffix: _EyeButton(visible: showOldPwd, onTap: onToggleOldPwd),
                 validator: (v) => (v == null || v.isEmpty)
                     ? l.tr('account.pwdRequired')
                     : null,
@@ -417,10 +415,7 @@ class _CredentialsCard extends StatelessWidget {
                 controller: newPwdCtrl,
                 hintText: l.tr('account.newPwd'),
                 obscure: !showNewPwd,
-                suffix: _EyeButton(
-                  visible: showNewPwd,
-                  onTap: onToggleNewPwd,
-                ),
+                suffix: _EyeButton(visible: showNewPwd, onTap: onToggleNewPwd),
                 validator: (v) => (v == null || v.isEmpty)
                     ? l.tr('account.pwdRequired')
                     : null,
@@ -543,22 +538,18 @@ class _TextInput extends StatelessWidget {
       controller: controller,
       obscureText: obscure,
       validator: validator,
-      style: TextStyle(
-        fontSize: 14,
-        color: context.colors.text,
-      ),
+      style: TextStyle(fontSize: 14, color: context.colors.text),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: TextStyle(
-          fontSize: 13,
-          color: context.colors.softMuted,
-        ),
+        hintStyle: TextStyle(fontSize: 13, color: context.colors.softMuted),
         isDense: true,
         filled: true,
         fillColor: context.colors.canvas,
         suffixIcon: suffix,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: context.colors.border),
@@ -799,8 +790,8 @@ class _MfaCardState extends State<_MfaCard> {
                           onPressed: widget.enableLoading
                               ? null
                               : () => widget.onSubmitEnable(
-                                    _codeCtrl.text.trim(),
-                                  ),
+                                  _codeCtrl.text.trim(),
+                                ),
                           style: FilledButton.styleFrom(
                             backgroundColor: context.colors.primary,
                             foregroundColor: context.colors.fontOnPrimary,
@@ -878,14 +869,8 @@ class _MfaStatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        enabled
-            ? l.tr('account.mfa.statusOn')
-            : l.tr('account.mfa.statusOff'),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: fg,
-        ),
+        enabled ? l.tr('account.mfa.statusOn') : l.tr('account.mfa.statusOff'),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg),
       ),
     );
   }

@@ -127,6 +127,9 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
 
   Future<void> _revoke(LoginSession session) async {
     final l = AppLocalizations.of(context);
+    final currentDeviceId = ref.read(authProvider).session?.deviceId ?? '';
+    final revokingCurrentSession =
+        session.deviceId.isNotEmpty && session.deviceId == currentDeviceId;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -151,12 +154,21 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
     if (confirmed != true || !mounted) return;
     setState(() => _revokingId = session.id);
     try {
-      await ref
-          .read(settingsRepositoryProvider)
-          .revokeSession(session.id);
+      await ref.read(settingsRepositoryProvider).revokeSession(session.id);
       if (!mounted) return;
+      if (revokingCurrentSession) {
+        await ref.read(authProvider.notifier).signOut();
+        return;
+      }
       _showSnack(l.tr('sessions.revokeDone'));
       await ref.read(loginLogProvider.notifier).refresh();
+    } on UnauthorizedFailure catch (err) {
+      if (!mounted) return;
+      if (!revokingCurrentSession) {
+        _showSnack(err.message);
+        return;
+      }
+      await ref.read(authProvider.notifier).signOut();
     } on ApiFailure catch (err) {
       if (!mounted) return;
       _showSnack(err.message);
@@ -204,10 +216,7 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
                       color: context.colors.danger,
                     ),
                   )
-                : Icon(
-                    Icons.delete_outline,
-                    color: context.colors.danger,
-                  ),
+                : Icon(Icons.delete_outline, color: context.colors.danger),
           ),
           const SizedBox(width: 6),
         ],
@@ -215,8 +224,7 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
       body: RefreshIndicator(
         onRefresh: () => runRefreshWithFeedback(
           context,
-          () =>
-              ref.read(loginLogProvider.notifier).refresh(throwOnError: true),
+          () => ref.read(loginLogProvider.notifier).refresh(throwOnError: true),
         ),
         child: logAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -235,8 +243,7 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
 
   Widget _buildBody(LoginLogData data) {
     final l = AppLocalizations.of(context);
-    final currentDeviceId =
-        ref.watch(authProvider).session?.deviceId ?? '';
+    final currentDeviceId = ref.watch(authProvider).session?.deviceId ?? '';
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
@@ -247,9 +254,7 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
           dirty: _whitelistDirty,
           onAdd: _addIp,
           onRemove: _removeIp,
-          onSave: _whitelistDirty && !_whitelistSaving
-              ? _saveWhitelist
-              : null,
+          onSave: _whitelistDirty && !_whitelistSaving ? _saveWhitelist : null,
         ),
         const SizedBox(height: 18),
         _SectionHeader(
@@ -264,14 +269,13 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
               padding: const EdgeInsets.only(bottom: 10),
               child: _SessionCard(
                 session: session,
-                isCurrent: session.deviceId.isNotEmpty &&
+                isCurrent:
+                    session.deviceId.isNotEmpty &&
                     session.deviceId == currentDeviceId,
                 createLabel: _formatTimestamp(session.createAt),
                 expireLabel: _formatTimestamp(session.expireAt),
                 revoking: _revokingId == session.id,
-                onRevoke: session.revoked
-                    ? null
-                    : () => _revoke(session),
+                onRevoke: session.revoked ? null : () => _revoke(session),
               ),
             ),
       ],
@@ -345,10 +349,7 @@ class _IpWhitelistCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 l.tr('sessions.ipEmpty'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.colors.softMuted,
-                ),
+                style: TextStyle(fontSize: 12, color: context.colors.softMuted),
               ),
             )
           else
@@ -547,11 +548,12 @@ class _SessionCard extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final nativeClient = session.isNativeClient;
     final bg = isCurrent ? context.colors.accentSoft : context.colors.card;
-    final borderColor = isCurrent ? context.colors.primary : context.colors.border;
+    final borderColor = isCurrent
+        ? context.colors.primary
+        : context.colors.border;
     final borderWidth = isCurrent ? 2.0 : 1.0;
 
-    final ipLabel =
-        session.ip.isEmpty ? '-' : session.ip;
+    final ipLabel = session.ip.isEmpty ? '-' : session.ip;
     final location = session.location;
 
     return Container(
@@ -568,9 +570,7 @@ class _SessionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(
-                nativeClient
-                    ? Icons.smartphone_rounded
-                    : Icons.monitor_rounded,
+                nativeClient ? Icons.smartphone_rounded : Icons.monitor_rounded,
                 size: 18,
                 color: context.colors.primary,
               ),
@@ -600,10 +600,7 @@ class _SessionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _StatusBadge(
-                label: _statusLabel(l),
-                tone: _statusTone(),
-              ),
+              _StatusBadge(label: _statusLabel(l), tone: _statusTone()),
             ],
           ),
           const SizedBox(height: 10),
@@ -696,8 +693,14 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (bg, fg) = switch (tone) {
-      _StatusTone.success => (context.colors.success, context.colors.fontOnPrimary),
-      _StatusTone.primary => (context.colors.accentSoft, context.colors.primary),
+      _StatusTone.success => (
+        context.colors.success,
+        context.colors.fontOnPrimary,
+      ),
+      _StatusTone.primary => (
+        context.colors.accentSoft,
+        context.colors.primary,
+      ),
       _StatusTone.muted => (context.colors.chip, context.colors.muted),
     };
     return Container(
