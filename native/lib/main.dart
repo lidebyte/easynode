@@ -10,6 +10,7 @@ Future<void> main() async {
   } catch (e, s) {
     runApp(
       MaterialApp(
+        debugShowCheckedModeBanner: false,
         home: Scaffold(
           body: SafeArea(
             child: SingleChildScrollView(

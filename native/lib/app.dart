@@ -259,6 +259,7 @@ class _AppRootState extends ConsumerState<_AppRoot> {
 
     return MaterialApp(
       title: 'EasyNode',
+      debugShowCheckedModeBanner: false,
       navigatorKey: _navigatorKey,
       scaffoldMessengerKey: _messengerKey,
       themeMode: ref.watch(themeModeProvider),
