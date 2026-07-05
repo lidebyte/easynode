@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
@@ -93,6 +94,7 @@ class ServerStatusMonitorManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  // 刷新按钮：彻底丢弃旧的 SSH 连接（含持久化 shell），重新建立一条全新连接
   Future<void> refresh(String hostId) async {
     final runtime = _runtimes[hostId];
     if (runtime == null) return;
@@ -127,6 +129,8 @@ class ServerStatusMonitorManager extends ChangeNotifier {
             : null,
         identities: identities,
       );
+      // 整个连接生命周期只开一条持久化 shell，后续所有采集命令复用同一个远端 bash 进程
+      await _initPersistentShell(runtime);
       runtime.entry.state = ServerStatusMonitorState.connected;
       notifyListeners();
       await _refresh(runtime);
@@ -141,9 +145,90 @@ class ServerStatusMonitorManager extends ChangeNotifier {
     }
   }
 
-  Future<String> _run(SSHClient client, String command) async {
-    final data = await client.run(command);
-    return utf8.decode(data, allowMalformed: true);
+  // 打开一条持久化 shell（不分配 pty，输出干净不含控制字符），
+  // 之后所有采集命令都写入这同一个 bash 的 stdin，靠 marker 识别输出边界，
+  // 全程只 fork 一次远端 shell，而不是每组数据都开一个新 exec channel
+  Future<void> _initPersistentShell(_MonitorRuntime runtime) async {
+    final client = runtime.client;
+    if (client == null) throw StateError('SSH client not ready');
+
+    final session = await client.execute('/bin/bash --noprofile --norc -i');
+    runtime.persistentShell = session;
+    runtime.shellReady = true;
+    runtime.shellBuffer = '';
+
+    session.write(Uint8List.fromList(utf8.encode('unset HISTFILE\n')));
+
+    runtime.shellStdoutSub = session.stdout.listen(
+      (data) {
+        runtime.shellBuffer += utf8.decode(data, allowMalformed: true);
+        _drainShellBuffer(runtime);
+      },
+      onDone: () {
+        runtime.shellReady = false;
+        runtime.persistentShell = null;
+        runtime.rejectPendingShellCommands(
+          StateError('persistent shell closed'),
+        );
+      },
+      onError: (_) {
+        runtime.shellReady = false;
+        runtime.persistentShell = null;
+        runtime.rejectPendingShellCommands(
+          StateError('persistent shell error'),
+        );
+      },
+    );
+  }
+
+  // 按行切分 shell 输出，遇到队首命令的 marker 即视为该命令输出完毕
+  void _drainShellBuffer(_MonitorRuntime runtime) {
+    int index;
+    while ((index = runtime.shellBuffer.indexOf('\n')) != -1) {
+      final line = runtime.shellBuffer.substring(0, index).trimRight();
+      runtime.shellBuffer = runtime.shellBuffer.substring(index + 1);
+      if (runtime.shellCmdQueue.isEmpty) continue;
+      final current = runtime.shellCmdQueue.first;
+      if (line == current.marker) {
+        runtime.shellCmdQueue.removeAt(0);
+        if (!current.completer.isCompleted) {
+          current.completer.complete(current.output.toString().trimRight());
+        }
+        if (runtime.shellCmdQueue.isNotEmpty) {
+          _sendNextShellCommand(runtime);
+        }
+      } else {
+        current.output.writeln(line);
+      }
+    }
+  }
+
+  void _sendNextShellCommand(_MonitorRuntime runtime) {
+    if (runtime.shellCmdQueue.isEmpty ||
+        !runtime.shellReady ||
+        runtime.persistentShell == null) {
+      return;
+    }
+    final current = runtime.shellCmdQueue.first;
+    runtime.persistentShell!.write(
+      Uint8List.fromList(
+        utf8.encode(' ${current.command}; echo ${current.marker}\n'),
+      ),
+    );
+  }
+
+  // 通过持久化 shell 执行命令（取代原先每次都新开 exec channel 的 client.run）
+  Future<String> _executeShellCommand(_MonitorRuntime runtime, String command) {
+    if (!runtime.shellReady || runtime.persistentShell == null) {
+      return Future.error(StateError('persistent shell not ready'));
+    }
+    final marker = '__EZCMD_END_${++runtime.shellCmdCounter}__';
+    final task = _PendingShellCommand(command, marker);
+    runtime.shellCmdQueue.add(task);
+    if (runtime.shellCmdQueue.length == 1) {
+      _sendNextShellCommand(runtime);
+    }
+    return task.completer.future;
   }
 
   void _emitSnapshot(_MonitorRuntime runtime) {
@@ -177,11 +262,9 @@ class ServerStatusMonitorManager extends ChangeNotifier {
 
   Future<void> _fetchStaticInfo(_MonitorRuntime runtime) async {
     if (runtime.staticInfoFetched) return;
-    final client = runtime.client;
-    if (client == null) return;
     const sep = '---EASYNODE_SEP---';
-    final output = await _run(
-      client,
+    final output = await _executeShellCommand(
+      runtime,
       'hostname\necho $sep'
       '\ncat /etc/os-release\necho $sep'
       '\nuname -m\necho $sep'
@@ -209,19 +292,18 @@ class ServerStatusMonitorManager extends ChangeNotifier {
   }
 
   Future<void> _refresh(_MonitorRuntime runtime) async {
-    final client = runtime.client;
-    if (client == null || runtime.refreshing) return;
+    if (!runtime.shellReady || runtime.refreshing) return;
     runtime.refreshing = true;
     try {
-      // Group 0: Static info (first cycle only, one SSH channel)
+      // Group 0: Static info (first cycle only, one command through the persistent shell)
       try {
         await _fetchStaticInfo(runtime);
       } catch (_) {}
 
       // Group 1: CPU (/proc/stat + uptime)
       try {
-        final output = await _run(
-          client,
+        final output = await _executeShellCommand(
+          runtime,
           'cat /proc/stat\necho ---EASYNODE_SEP---\ncat /proc/uptime && uptime',
         );
         final parts = output.split('---EASYNODE_SEP---');
@@ -244,13 +326,13 @@ class ServerStatusMonitorManager extends ChangeNotifier {
         _emitSnapshot(runtime);
       } catch (_) {}
 
-      if (client.isClosed) return;
+      if (!runtime.shellReady) return;
 
       // Group 2: Memory (+ cgroup 内存/交换分区限制，容器化环境下 free -m 反映的是宿主机数据)
       try {
         const memSep = '---EASYNODE_MEMSEP---';
-        final output = await _run(
-          client,
+        final output = await _executeShellCommand(
+          runtime,
           'free -m\necho $memSep'
           '\nif [ -f /sys/fs/cgroup/memory.max ]; then echo v2; '
           'cat /sys/fs/cgroup/memory.max; cat /sys/fs/cgroup/memory.current; '
@@ -277,24 +359,24 @@ class ServerStatusMonitorManager extends ChangeNotifier {
         _emitSnapshot(runtime);
       } catch (_) {}
 
-      if (client.isClosed) return;
+      if (!runtime.shellReady) return;
 
       // Group 3: Disk
       try {
-        final output = await _run(
-          client,
+        final output = await _executeShellCommand(
+          runtime,
           'df -kP -x tmpfs -x devtmpfs -x proc -x sysfs -x overlay',
         );
         runtime.currentDrivesInfo = ServerStatusParser.parseDrives(output);
         _emitSnapshot(runtime);
       } catch (_) {}
 
-      if (client.isClosed) return;
+      if (!runtime.shellReady) return;
 
       // Group 4: Network
       try {
         final now = DateTime.now();
-        final output = await _run(client, 'cat /proc/net/dev');
+        final output = await _executeShellCommand(runtime, 'cat /proc/net/dev');
         final counters = ServerStatusParser.parseNetworkCounters(output);
         runtime.currentNetstatInfo = ServerStatusParser.networkRate(
           previous: runtime.previousNetworkCounters,
@@ -328,6 +410,16 @@ class ServerStatusMonitorManager extends ChangeNotifier {
   }
 }
 
+// 排队中的单条 shell 命令：等待输出中出现 marker 才算完成
+class _PendingShellCommand {
+  _PendingShellCommand(this.command, this.marker);
+
+  final String command;
+  final String marker;
+  final Completer<String> completer = Completer<String>();
+  final StringBuffer output = StringBuffer();
+}
+
 class _MonitorRuntime {
   _MonitorRuntime({required this.entry});
 
@@ -336,6 +428,14 @@ class _MonitorRuntime {
   SSHClient? client;
   Timer? timer;
   bool refreshing = false;
+
+  // 持久化 shell（整个连接生命周期只开一条，采集命令全部复用它）
+  SSHSession? persistentShell;
+  bool shellReady = false;
+  StreamSubscription<Uint8List>? shellStdoutSub;
+  final List<_PendingShellCommand> shellCmdQueue = [];
+  int shellCmdCounter = 0;
+  String shellBuffer = '';
 
   // Delta tracking
   ProcCpuStats? previousCpuStats;
@@ -368,9 +468,32 @@ class _MonitorRuntime {
     inputMb: 0, outputMb: 0, interfaceName: null,
   );
 
+  // 让所有还在排队/等待中的命令立即失败，而不是永久挂起
+  // （挂起会导致 _refresh 里的 finally 永远跑不到，refreshing 卡死为 true，
+  // 后续所有刷新——包括手动点刷新重连后的第一次——都会被挡在最前面的判断里）
+  void rejectPendingShellCommands(Object error) {
+    final pending = List<_PendingShellCommand>.from(shellCmdQueue);
+    shellCmdQueue.clear();
+    for (final task in pending) {
+      if (!task.completer.isCompleted) {
+        task.completer.completeError(error);
+      }
+    }
+  }
+
   Future<void> close({bool keepEntryState = false}) async {
     timer?.cancel();
     timer = null;
+
+    shellReady = false;
+    rejectPendingShellCommands(StateError('monitor connection closed'));
+
+    await shellStdoutSub?.cancel();
+    shellStdoutSub = null;
+    persistentShell?.close();
+    persistentShell = null;
+    shellBuffer = '';
+
     final oldClient = client;
     final oldTransport = transport;
     client = null;
