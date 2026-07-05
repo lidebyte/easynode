@@ -148,6 +148,14 @@ class TerminalSessionManager extends ChangeNotifier {
       session.status = TerminalSessionStatus.error;
       session.lastError = error.toString();
       session.controller.terminal.write('\r\n[Error] ${session.lastError}\r\n');
+      // 连接失败时 SshTerminalController 还没接管 terminal.onOutput（只有 shell()
+      // 成功后才会赋值），此时按键原本无处可去；这里临时接管一下，让回车触发重连。
+      session.controller.terminal.onOutput = (data) {
+        if (session.status == TerminalSessionStatus.error &&
+            (data.contains('\r') || data.contains('\n'))) {
+          unawaited(reconnect(session.id));
+        }
+      };
       notifyListeners();
     }
   }
