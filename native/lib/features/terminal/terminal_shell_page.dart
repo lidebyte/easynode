@@ -30,6 +30,15 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
     caseSensitive: false,
   );
 
+  // TerminalView 自己的内边距：RenderTerminal.getOffset()/globalToLocal() 返回的坐标
+  // 是相对 RenderTerminal 自身（padding 内侧）的，而选区菜单/手柄/放大镜是用 Positioned
+  // 摆在外层 Stack（padding 外侧）里的，两者之间正好差这一圈 padding，必须补上，
+  // 否则手柄会系统性地偏离选中字符的实际边界。
+  static const _terminalContentPadding = EdgeInsets.symmetric(
+    horizontal: 4,
+    vertical: 6,
+  );
+
   double _lastKeyboardHeight = 0;
   bool _showKeyPanel = false;
   bool _allowTerminalFocus = true;
@@ -38,8 +47,15 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
   final FocusNode _searchFocusNode = FocusNode();
   final Map<String, VoidCallback> _selectionListeners = {};
   final Map<String, _TerminalSearchState> _searchStates = {};
-  String? _touchSelectingSessionId;
-  final Map<String, Offset> _touchSelectionStartPositions = {};
+  // 当前实时触摸点（active session 的终端本地坐标），驱动放大镜显示；
+  // 长按选词/拖动扩展选区完全交给 xterm 内建手势处理，这里只用 Listener 被动跟踪坐标，
+  // 不参与手势竞技场，避免和 xterm 内部的 LongPressGestureRecognizer 竞争同一次触摸。
+  final ValueNotifier<Offset?> _liveTouchPosition = ValueNotifier(null);
+  Timer? _longPressMenuTimer;
+  String? _longPressMenuSessionId;
+  Offset? _longPressMenuOffset;
+  Offset? _longPressPointerDownOffset;
+  bool _ignoreNextTapUp = false;
   bool _showSearchBar = false;
   Timer? _searchDebounce;
 
@@ -223,6 +239,11 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
   }
 
   void _handleLinkTap(TerminalSession session, TapUpDetails details) {
+    if (_ignoreNextTapUp) {
+      _ignoreNextTapUp = false;
+      return;
+    }
+    _clearLongPressMenu();
     final offset = _cellOffsetForGlobalPosition(
       session,
       details.globalPosition,
@@ -237,35 +258,94 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
     _onTerminalTap(session, offset);
   }
 
-  void _handleSelectionStart(
-    TerminalSession session,
-    LongPressStartDetails details,
-  ) {
-    final render = _renderTerminalFor(session);
-    if (render == null) return;
-    _touchSelectingSessionId = session.id;
-    final localPosition = render.globalToLocal(details.globalPosition);
-    _touchSelectionStartPositions[session.id] = localPosition;
-    render.selectWord(localPosition);
+  // RenderTerminal.getOffset()/globalToLocal() 返回的是相对 RenderTerminal 自身（也就是
+  // TerminalView padding 内侧）的坐标；而选区菜单/手柄/放大镜都是用 Positioned 摆在外层
+  // Stack（padding 外侧，和 TerminalView 同级）里的，所以要统一补上这一圈 padding，
+  // 否则这些浮层会系统性地偏离选中字符的实际像素位置。
+  Offset _toOverlayLocal(Offset renderLocalOffset) {
+    return renderLocalOffset + _terminalContentPadding.topLeft;
   }
 
-  void _handleSelectionUpdate(
+  Offset? _overlayLocalForGlobalPosition(
     TerminalSession session,
-    LongPressMoveUpdateDetails details,
+    Offset globalPosition,
   ) {
-    if (_touchSelectingSessionId != session.id) return;
     final render = _renderTerminalFor(session);
-    final from = _touchSelectionStartPositions[session.id];
-    if (render == null || from == null) return;
-    final to = render.globalToLocal(details.globalPosition);
-    render.selectWord(from, to);
+    if (render == null) return null;
+    return _toOverlayLocal(render.globalToLocal(globalPosition));
   }
 
-  void _handleSelectionEnd(TerminalSession session) {
-    if (_touchSelectingSessionId == session.id) {
-      _touchSelectingSessionId = null;
+  // 被动跟踪原始触摸点，只用来驱动放大镜定位——不调用 selectWord/setSelection，
+  // 长按选词和拖动扩展选区完全由 xterm 内部的 TerminalGestureHandler 处理。
+  void _trackTouchPosition(TerminalSession session, Offset globalPosition) {
+    final offset = _overlayLocalForGlobalPosition(session, globalPosition);
+    if (offset == null) return;
+    _liveTouchPosition.value = offset;
+  }
+
+  void _clearTouchPosition() {
+    if (_liveTouchPosition.value != null) {
+      _liveTouchPosition.value = null;
     }
-    _touchSelectionStartPositions.remove(session.id);
+  }
+
+  void _clearPendingLongPressMenu() {
+    _longPressMenuTimer?.cancel();
+    _longPressMenuTimer = null;
+    _longPressPointerDownOffset = null;
+  }
+
+  void _clearLongPressMenu() {
+    _clearPendingLongPressMenu();
+    _ignoreNextTapUp = false;
+    if (_longPressMenuSessionId == null && _longPressMenuOffset == null) return;
+    setState(() {
+      _longPressMenuSessionId = null;
+      _longPressMenuOffset = null;
+    });
+  }
+
+  void _handleTerminalPointerDown(
+    TerminalSession session,
+    PointerDownEvent event,
+  ) {
+    _trackTouchPosition(session, event.position);
+    final menuOffset = _overlayLocalForGlobalPosition(session, event.position);
+    if (menuOffset == null) return;
+    _longPressPointerDownOffset = menuOffset;
+    _longPressMenuTimer?.cancel();
+    _longPressMenuTimer = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted || _manager.activeSession?.id != session.id) return;
+      _ignoreNextTapUp = true;
+      setState(() {
+        _longPressMenuSessionId = session.id;
+        _longPressMenuOffset = menuOffset;
+      });
+    });
+  }
+
+  void _handleTerminalPointerMove(
+    TerminalSession session,
+    PointerMoveEvent event,
+  ) {
+    _trackTouchPosition(session, event.position);
+    final start = _longPressPointerDownOffset;
+    final current = _overlayLocalForGlobalPosition(session, event.position);
+    if (start == null || current == null) return;
+    if ((current - start).distanceSquared > 144) {
+      _ignoreNextTapUp = false;
+      _clearPendingLongPressMenu();
+    }
+  }
+
+  void _handleTerminalPointerUp() {
+    _clearPendingLongPressMenu();
+    _clearTouchPosition();
+  }
+
+  void _handleTerminalPointerCancel() {
+    _clearPendingLongPressMenu();
+    _clearTouchPosition();
   }
 
   void _showTerminalSnack(String message) {
@@ -298,16 +378,17 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
     required bool start,
   }) {
     final render = _renderTerminalFor(session);
-    final selection = _normalizedSelection(session);
+    final selection = session.viewController.selection;
     if (render == null || selection == null) return null;
+    // selection.end 已经是「选区之后第一个格子」的位置（exclusive），
+    // getOffset(end) 本身就是选区的右边界——不能再额外加一个 cellSize.width，
+    // 否则会多移一整格，导致终点手柄盖住选区后面的下一个字符。
+    //
+    // 手柄位置必须使用未 normalized 的 base/extent。用户把终点手柄反向拖过起点时，
+    // normalized.begin 会变成正在拖动的终点，导致视觉上的起点手柄跟着手指跑。
     final cell = start ? selection.begin : selection.end;
-    var offset = render.getOffset(cell);
-    if (!start) {
-      offset = offset.translate(render.cellSize.width, render.cellSize.height);
-    } else {
-      offset = offset.translate(0, render.cellSize.height);
-    }
-    return offset;
+    final offset = render.getOffset(cell).translate(0, render.cellSize.height);
+    return _toOverlayLocal(offset);
   }
 
   void _updateSelectionHandle(
@@ -316,7 +397,7 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
     required DragUpdateDetails details,
   }) {
     final buffer = session.controller.terminal.buffer;
-    final selection = _normalizedSelection(session);
+    final selection = session.viewController.selection;
     final target = _cellOffsetForGlobalPosition(
       session,
       details.globalPosition,
@@ -330,11 +411,51 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
     );
   }
 
+  void _handleHandleDragStart(
+    TerminalSession session,
+    DragStartDetails details,
+  ) {
+    _trackTouchPosition(session, details.globalPosition);
+  }
+
+  void _handleHandleDragUpdate(
+    TerminalSession session, {
+    required bool start,
+    required DragUpdateDetails details,
+  }) {
+    _updateSelectionHandle(session, start: start, details: details);
+    _trackTouchPosition(session, details.globalPosition);
+  }
+
+  void _normalizeSelectionDirection(TerminalSession session) {
+    final selection = session.viewController.selection;
+    if (selection == null || selection.isNormalized) return;
+    final normalized = selection.normalized;
+    final buffer = session.controller.terminal.buffer;
+    session.viewController.setSelection(
+      buffer.createAnchorFromOffset(normalized.begin),
+      buffer.createAnchorFromOffset(normalized.end),
+    );
+  }
+
+  void _handleHandleDragEnd(TerminalSession session, DragEndDetails details) {
+    _normalizeSelectionDirection(session);
+    _clearTouchPosition();
+  }
+
+  void _handleHandleDragCancel(TerminalSession session) {
+    _normalizeSelectionDirection(session);
+    _clearTouchPosition();
+  }
+
   Offset? _selectionMenuOffset(TerminalSession session) {
     final render = _renderTerminalFor(session);
     final selection = _normalizedSelection(session);
-    if (render == null || selection == null) return null;
-    final beginOffset = render.getOffset(selection.begin);
+    if (render == null) return null;
+    final beginOffset = selection == null
+        ? _longPressMenuOffset
+        : _toOverlayLocal(render.getOffset(selection.begin));
+    if (beginOffset == null) return null;
     final boxSize = render.size;
     const menuWidth = 200.0;
     const menuHeight = 44.0;
@@ -353,9 +474,13 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
 
   Future<void> _copySelection(TerminalSession session) async {
     final text = _selectedText(session);
-    if (text == null) return;
+    if (text == null) {
+      _clearLongPressMenu();
+      return;
+    }
     await Clipboard.setData(ClipboardData(text: text));
     session.viewController.clearSelection();
+    _clearLongPressMenu();
     if (!mounted) return;
     final l = AppLocalizations.of(context);
     _showTerminalSnack(l.tr('terminal.selectionCopied'));
@@ -364,20 +489,20 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
   Future<void> _pasteToTerminal(TerminalSession session) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
-    if (text == null || text.isEmpty) return;
+    if (text == null || text.isEmpty) {
+      _clearLongPressMenu();
+      return;
+    }
     session.controller.writeInput(text);
     session.viewController.clearSelection();
-    if (!mounted) return;
-    final l = AppLocalizations.of(context);
-    _showTerminalSnack(l.tr('terminal.pasted'));
+    _clearLongPressMenu();
   }
 
   void _clearTerminal(TerminalSession session) {
     session.controller.clearTerminal();
     session.viewController.clearSelection();
+    _clearLongPressMenu();
     _searchStates.remove(session.id)?.dispose();
-    final l = AppLocalizations.of(context);
-    _showTerminalSnack(l.tr('terminal.cleared'));
   }
 
   // void _toggleSearchBar() {
@@ -513,6 +638,8 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
     _searchCtrl.dispose();
     _searchFocusNode.dispose();
     _terminalFocusNode.dispose();
+    _longPressMenuTimer?.cancel();
+    _liveTouchPosition.dispose();
     super.dispose();
   }
 
@@ -604,44 +731,51 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
                                                 : null,
                                             autofocus: session.id == active?.id,
                                             deleteDetection: true,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 4,
-                                              vertical: 6,
-                                            ),
+                                            padding: _terminalContentPadding,
                                           ),
                                           if (session.id == active?.id)
                                             Positioned.fill(
-                                              child: GestureDetector(
+                                              // Listener 是原始指针监听，不进入手势竞技场，
+                                              // 只用来给放大镜取实时触摸坐标，长按选词/拖动
+                                              // 扩展选区完全交给 xterm 内建的 TerminalView 处理，
+                                              // 避免和它内部的 LongPressGestureRecognizer 竞争。
+                                              child: Listener(
                                                 behavior:
                                                     HitTestBehavior.translucent,
-                                                onTapUp: (details) =>
-                                                    _handleLinkTap(
+                                                onPointerDown: (event) =>
+                                                    _handleTerminalPointerDown(
                                                       session,
-                                                      details,
+                                                      event,
                                                     ),
-                                                onLongPressStart: (details) =>
-                                                    _handleSelectionStart(
+                                                onPointerMove: (event) =>
+                                                    _handleTerminalPointerMove(
                                                       session,
-                                                      details,
+                                                      event,
                                                     ),
-                                                onLongPressMoveUpdate:
-                                                    (details) =>
-                                                        _handleSelectionUpdate(
-                                                          session,
-                                                          details,
-                                                        ),
-                                                onLongPressEnd: (_) =>
-                                                    _handleSelectionEnd(
-                                                      session,
-                                                    ),
+                                                onPointerUp: (_) =>
+                                                    _handleTerminalPointerUp(),
+                                                onPointerCancel: (_) =>
+                                                    _handleTerminalPointerCancel(),
+                                                child: GestureDetector(
+                                                  behavior: HitTestBehavior
+                                                      .translucent,
+                                                  onTapUp: (details) =>
+                                                      _handleLinkTap(
+                                                        session,
+                                                        details,
+                                                      ),
+                                                ),
                                               ),
                                             ),
                                           if (session.id == active?.id &&
-                                              activeRange != null) ...[
+                                              (activeRange != null ||
+                                                  _longPressMenuSessionId ==
+                                                      session.id))
                                             _SelectionContextMenu(
                                               offset: _selectionMenuOffset(
                                                 session,
                                               ),
+                                              showCopy: activeRange != null,
                                               onCopy: () =>
                                                   _copySelection(session),
                                               onPaste: () =>
@@ -649,17 +783,38 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
                                               onClear: () =>
                                                   _clearTerminal(session),
                                             ),
+                                          if (session.id == active?.id &&
+                                              activeRange != null) ...[
                                             _SelectionHandle(
                                               offset: _selectionHandleOffset(
                                                 session,
                                                 start: true,
                                               ),
-                                              alignLeft: true,
+                                              knobOnTop: true,
+                                              cellHeight:
+                                                  _renderTerminalFor(
+                                                    session,
+                                                  )?.cellSize.height ??
+                                                  16,
+                                              onDragStart: (details) =>
+                                                  _handleHandleDragStart(
+                                                    session,
+                                                    details,
+                                                  ),
                                               onDragUpdate: (details) =>
-                                                  _updateSelectionHandle(
+                                                  _handleHandleDragUpdate(
                                                     session,
                                                     start: true,
                                                     details: details,
+                                                  ),
+                                              onDragEnd: (details) =>
+                                                  _handleHandleDragEnd(
+                                                    session,
+                                                    details,
+                                                  ),
+                                              onDragCancel: () =>
+                                                  _handleHandleDragCancel(
+                                                    session,
                                                   ),
                                             ),
                                             _SelectionHandle(
@@ -667,13 +822,41 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
                                                 session,
                                                 start: false,
                                               ),
-                                              alignLeft: false,
+                                              knobOnTop: false,
+                                              cellHeight:
+                                                  _renderTerminalFor(
+                                                    session,
+                                                  )?.cellSize.height ??
+                                                  16,
+                                              onDragStart: (details) =>
+                                                  _handleHandleDragStart(
+                                                    session,
+                                                    details,
+                                                  ),
                                               onDragUpdate: (details) =>
-                                                  _updateSelectionHandle(
+                                                  _handleHandleDragUpdate(
                                                     session,
                                                     start: false,
                                                     details: details,
                                                   ),
+                                              onDragEnd: (details) =>
+                                                  _handleHandleDragEnd(
+                                                    session,
+                                                    details,
+                                                  ),
+                                              onDragCancel: () =>
+                                                  _handleHandleDragCancel(
+                                                    session,
+                                                  ),
+                                            ),
+                                            _TerminalMagnifier(
+                                              liveTouchPosition:
+                                                  _liveTouchPosition,
+                                              containerSize:
+                                                  _renderTerminalFor(
+                                                    session,
+                                                  )?.size ??
+                                                  Size.zero,
                                             ),
                                           ],
                                         ],
@@ -838,12 +1021,14 @@ class _StatusDot extends StatelessWidget {
 class _SelectionContextMenu extends StatelessWidget {
   const _SelectionContextMenu({
     required this.offset,
+    required this.showCopy,
     required this.onCopy,
     required this.onPaste,
     required this.onClear,
   });
 
   final Offset? offset;
+  final bool showCopy;
   final VoidCallback onCopy;
   final VoidCallback onPaste;
   final VoidCallback onClear;
@@ -871,11 +1056,13 @@ class _SelectionContextMenu extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _SelectionMenuItem(
-                label: l.tr('terminal.selection.copy'),
-                onTap: onCopy,
-              ),
-              _SelectionMenuDivider(),
+              if (showCopy) ...[
+                _SelectionMenuItem(
+                  label: l.tr('terminal.selection.copy'),
+                  onTap: onCopy,
+                ),
+                _SelectionMenuDivider(),
+              ],
               _SelectionMenuItem(
                 label: l.tr('terminal.selection.paste'),
                 onTap: onPaste,
@@ -933,13 +1120,26 @@ class _SelectionMenuDivider extends StatelessWidget {
 class _SelectionHandle extends StatelessWidget {
   const _SelectionHandle({
     required this.offset,
-    required this.alignLeft,
+    required this.knobOnTop,
+    required this.cellHeight,
+    required this.onDragStart,
     required this.onDragUpdate,
+    required this.onDragEnd,
+    required this.onDragCancel,
   });
 
   final Offset? offset;
-  final bool alignLeft;
+  final bool knobOnTop;
+  final double cellHeight;
+  final GestureDragStartCallback onDragStart;
   final GestureDragUpdateCallback onDragUpdate;
+  final GestureDragEndCallback onDragEnd;
+  final GestureDragCancelCallback onDragCancel;
+
+  static const double _knobRadius = 8.0;
+  static const double _stemWidth = 2.0;
+  // 热区比视觉图形大一圈，满足约 44 逻辑像素的最小触控目标，不改变视觉大小。
+  static const double _hitPadding = 14.0;
 
   @override
   Widget build(BuildContext context) {
@@ -947,40 +1147,117 @@ class _SelectionHandle extends StatelessWidget {
     if (handleOffset == null) {
       return const SizedBox.shrink();
     }
-    const knobRadius = 8.0;
-    const stemHeight = 16.0;
-    final left = alignLeft
-        ? handleOffset.dx - knobRadius
-        : handleOffset.dx - knobRadius;
-    final top = handleOffset.dy - stemHeight;
+    // stem 竖线的高度用真实的字符格高度（随字体大小设置变化），而不是写死的像素值，
+    // 这样竖线正好贴合被选中字符的上下边界，不会有间隙。
+    final stemHeight = cellHeight;
+    final knobDiameter = _knobRadius * 2;
+    final color = Theme.of(context).colorScheme.primary;
     return Positioned(
-      left: left,
-      top: top,
+      // 竖线和圆点整体以 handleOffset.dx（选区边界的真实像素位置）为中心水平居中，
+      // 外面再包一圈透明热区方便手指拖拽，不影响视觉大小和居中效果。
+      left: handleOffset.dx - _knobRadius - _hitPadding,
+      top:
+          handleOffset.dy -
+          stemHeight -
+          (knobOnTop ? knobDiameter : 0) -
+          _hitPadding,
+      width: _knobRadius * 2 + _hitPadding * 2,
+      height: stemHeight + _knobRadius * 2 + _hitPadding * 2,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
+        onPanStart: onDragStart,
         onPanUpdate: onDragUpdate,
-        child: SizedBox(
-          width: knobRadius * 2,
-          height: stemHeight + knobRadius * 2,
+        onPanEnd: onDragEnd,
+        onPanCancel: onDragCancel,
+        child: Padding(
+          padding: const EdgeInsets.all(_hitPadding),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 2,
-                height: stemHeight,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              Container(
-                width: knobRadius * 2,
-                height: knobRadius * 2,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-              ),
+              if (knobOnTop) _SelectionHandleKnob(color: color),
+              Container(width: _stemWidth, height: stemHeight, color: color),
+              if (!knobOnTop) _SelectionHandleKnob(color: color),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SelectionHandleKnob extends StatelessWidget {
+  const _SelectionHandleKnob({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _SelectionHandle._knobRadius * 2,
+      height: _SelectionHandle._knobRadius * 2,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _TerminalMagnifier extends StatelessWidget {
+  const _TerminalMagnifier({
+    required this.liveTouchPosition,
+    required this.containerSize,
+  });
+
+  final ValueNotifier<Offset?> liveTouchPosition;
+  final Size containerSize;
+
+  static const _size = Size(140, 90);
+  static const _verticalGap = 28.0;
+  static const _scale = 1.75;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Offset?>(
+      valueListenable: liveTouchPosition,
+      builder: (context, touch, _) {
+        if (touch == null) return const SizedBox.shrink();
+        final maxLeft = max(4.0, containerSize.width - _size.width - 4.0);
+        final left = (touch.dx - _size.width / 2).clamp(4.0, maxLeft);
+        var top = touch.dy - _verticalGap - _size.height;
+        if (top < 4.0) {
+          // 上方空间不够（比如选中的是第一行）时，改为显示在触摸点下方。
+          top = touch.dy + _verticalGap;
+        }
+        final magnifierCenter = Offset(
+          left + _size.width / 2,
+          top + _size.height / 2,
+        );
+        return Positioned(
+          left: left,
+          top: top,
+          child: IgnorePointer(
+            child: RawMagnifier(
+              size: _size,
+              magnificationScale: _scale,
+              focalPointOffset: touch - magnifierCenter,
+              decoration: MagnifierDecoration(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 1.5,
+                  ),
+                ),
+                shadows: const [
+                  BoxShadow(
+                    color: Colors.black38,
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

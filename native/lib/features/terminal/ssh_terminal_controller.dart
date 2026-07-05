@@ -121,7 +121,11 @@ class SshTerminalController {
   }
 
   void clearTerminal() {
-    terminal.buffer.clear();
+    if (_session == null) {
+      terminal.write('\x1b[H\x1b[2J\x1b[3J');
+      return;
+    }
+    writeInput('\x0c');
   }
 
   void _writeTerminalOutput(String text) {
