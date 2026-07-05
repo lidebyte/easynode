@@ -1,5 +1,28 @@
 [
   {
+    "version": "v3.7.1",
+    "date": "2026-07-05",
+    "nativeVersion": "native-v1.1.0",
+    "nativeReleaseUrl": "https://github.com/chaos-zhu/easynode/releases",
+    "iosReleaseUrl": "",
+    "ohosReleaseUrl": "",
+    "features": [
+      "服务端实例状态获取优化",
+      "AI扫描安全问题修复",
+      "登录有效期调整为最高支持30天，取消临时登录选项",
+      "其他功能优化与bug修复"
+    ],
+    "nativeFeatures": [
+      "新增终端页服务器状态组件",
+      "新增Docker容器Tab & 终端页Docker联动",
+      "新增SFTP长按docker-compose.yml的快捷指令下发",
+      "终端字体可设置为更小",
+      "终端重连机制优化；支持回车触发重连",
+      "优化安卓端键盘唤起/收起逻辑",
+      "其他功能优化与bug修复"
+    ]
+  },
+  {
     "version": "v3.7.0",
     "date": "2026-06-13",
     "nativeVersion": "native-v1.0.1",

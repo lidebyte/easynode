@@ -1,10 +1,25 @@
 ## TODO
 
 * 批量下发后台定时任务
-* 移动端Ctrl、Tab的按键面板
 * 数据导出(2fa强制)
 * 探针接入
 * 支持csv模板特定格式导入
+* AI功能增强
+
+## [native-v1.1.0](https://github.com/chaos-zhu/easynode/releases) (2026-07-05)
+* 新增终端页服务器状态组件
+* 新增Docker容器Tab & 终端页Docker联动
+* 新增SFTP长按docker-compose.yml的快捷指令下发
+* 终端字体可设置为更小
+* 终端重连机制优化；支持回车触发重连
+* 优化安卓端键盘唤起/收起逻辑
+* 其他功能、视觉优化与bug修复
+
+## [3.7.1](https://github.com/chaos-zhu/easynode/releases) (2026-07-05)
+* 服务端实例状态获取优化
+* AI扫描安全问题修复
+* 登录有效期调整为最高支持30天，取消临时登录选项
+* 其他功能优化与bug修复
 
 ## [native-v1.0.1](https://github.com/chaos-zhu/easynode/releases) (2026-06-13)
 * 终端页功能增强：布局调整、长命令输入、脚本库联动、终端连接管理、SFTP联动、功能键支持，终端设置支持
@@ -12,12 +27,10 @@
 * 新增暗黑主题切换
 * 其他功能优化与bug修复
 
-
 ## [3.7.0](https://github.com/chaos-zhu/easynode/releases) (2026-05-30)
 * 原生Android移动端内测版发布，IOS稍后发布，欢迎Android用户加入内测反馈使用体验
 * 鉴权优化，移除IP统计
 * 其他功能优化与bug修复
-
 
 ## [3.6.1](https://github.com/chaos-zhu/easynode/releases) (2026-03-15)
 * 新增终端内右键挂起&单窗口模式头部右键菜单
