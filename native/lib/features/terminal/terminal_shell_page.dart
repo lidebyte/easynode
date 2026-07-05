@@ -59,7 +59,14 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
       setState(() => _allowTerminalFocus = true);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _terminalFocusNode.requestFocus();
+        // 系统键盘可能是用户手动收起的，此时 FocusNode 仍然 hasFocus，
+        // 单纯 requestFocus() 是空操作，必须走 requestKeyboard() 才能强制重新 show()
+        final activeSession = _manager.activeSession;
+        if (activeSession != null) {
+          activeSession.viewKey.currentState?.requestKeyboard();
+        } else {
+          _terminalFocusNode.requestFocus();
+        }
       });
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted && _showKeyPanel) {
@@ -221,6 +228,12 @@ class _TerminalShellPageState extends ConsumerState<TerminalShellPage> {
       details.globalPosition,
     );
     if (offset == null) return;
+    // 点击命中链接时走原有的打开链接流程；未命中链接时兜底尝试唤起键盘——
+    // 覆盖 xterm 内部 _onTapDown 在残留选区场景下不会请求键盘的情况，requestKeyboard() 本身幂等
+    if (_extractUrlAtOffset(session, offset) == null) {
+      session.viewKey.currentState?.requestKeyboard();
+      return;
+    }
     _onTerminalTap(session, offset);
   }
 
