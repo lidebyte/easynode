@@ -2,7 +2,7 @@
 
 # EasyNode
 
-_✨ 一个多功能Linux服务器WEB终端面板(webSSH&webSFTP) ✨_
+_✨ 一个多功能Linux服务器终端面板(webSSH&webSFTP) ✨_
 
 </div>
 
@@ -25,6 +25,8 @@ _✨ 一个多功能Linux服务器WEB终端面板(webSSH&webSFTP) ✨_
   <a href="#功能">功能</a>
   ·
   <a href="#面板展示">面板展示</a>
+  ·
+  <a href="#移动端展示">移动端展示</a>
   ·
   <a href="#项目部署">项目部署</a>
   ·
@@ -49,10 +51,23 @@ _✨ 一个多功能Linux服务器WEB终端面板(webSSH&webSFTP) ✨_
 + [x] 多渠道通知
 + [x] 批量下发指令
 + [x] 自定义终端主题
++ [x] Native移动端，支持iOS / Android原生SSH、SFTP、Docker、脚本库等能力
 
 ## 面板展示
 
 ![面板展示](./doc_images/merge.gif)
+
+## 移动端展示
+
+Native端复用现有EasyNode后端，在移动设备上提供服务器管理、原生SSH终端、SFTP文件管理、Docker、脚本库和服务器状态等能力。
+
+<p align="center">
+  <img src="./doc_images/main3.png" alt="Native端服务器、SFTP和脚本库展示" width="900">
+</p>
+
+<p align="center">
+  <img src="./doc_images/terminal3.png" alt="Native端SSH终端、SFTP和服务器状态展示" width="900">
+</p>
 
 ## 项目部署
 
